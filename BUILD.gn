@@ -13,6 +13,18 @@
 
 import("//build/ohos.gni")
 
+config("iowow_public_config") {
+  include_dirs = [
+    "//third_party/iowow/src",
+    "//third_party/iowow/src/fs",
+    "//third_party/iowow/src/kv",
+    "//third_party/iowow/src/log",
+    "//third_party/iowow/src/platform",
+    "//third_party/iowow/src/rdb",
+    "//third_party/iowow/src/utils",
+  ]
+}
+
 config("iowow_config") {
   include_dirs = [
     "//third_party/iowow/src",
@@ -41,7 +53,7 @@ config("iowow_config") {
     "-Wno-missing-braces",
     "-O3",
     "-DNDEBUG",
-    "-U__ANDROID__"
+    "-U__ANDROID__",
   ]
 
   defines = [
@@ -70,7 +82,7 @@ config("iowow_config") {
 ohos_shared_library("iowow") {
   configs = [ ":iowow_config" ]
 
-  public_configs = [ ":iowow_config" ]
+  public_configs = [ ":iowow_public_config" ]
 
   sources = [
     "src/fs/iwexfile.c",
