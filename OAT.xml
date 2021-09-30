@@ -78,6 +78,7 @@ Note:If the text contains special characters, please escape them according to th
                 <filteritem type="filepath" name=".*" desc="Describe the reason for filtering scan results"/>
             </filefilter>
             <filefilter name="binaryFileTypePolicyFilter" desc="Filters for binary file policies">
+                <filteritem type="filename" name=".png" desc="the picture of iowow"/>
             </filefilter>
         </filefilterlist>
         <licensematcherlist>
