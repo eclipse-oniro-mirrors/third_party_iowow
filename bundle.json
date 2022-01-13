@@ -1,0 +1,39 @@
+{
+    "name": "@ohos/iowow",
+    "version": "",
+    "description": "Third-party open-source software iowow | 三方开源软件iowow",
+    "homePage": "https://gitee.com/openharmony",
+    "license": "MIT",
+    "repository": "https://gitee.com/openharmony/third_party_iowow",
+    "domain": "os",
+    "language": "",
+    "publishAs": "code-segment",
+    "private": false,
+    "scripts": {},
+    "tags": [
+        "third_party"
+    ],
+    "keywords": [
+        "third-party",
+        "iowow"
+    ],
+    "envs": {},
+    "dirs": {},
+    "segment": {
+        "destPath": "third_party/iowow"
+    },
+    "component": {
+        "name": "thirdparty_iowow",
+        "subsystem": "",
+        "syscap": [],
+        "features": [],
+        "adapted_system_type": [],
+        "rom": "",
+        "ram": "",
+        "build": {
+            "sub_component": [],
+            "inner_kits": [],
+            "test": []
+        }
+    }
+}
