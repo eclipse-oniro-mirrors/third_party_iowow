@@ -1,0 +1,30 @@
+{
+    "name": "@ohos/iowow",
+    "description": "Third-party open-source software iowow | IOWOW - The C11 persistent key/value database engine based on [skip list]",
+    "version": "3.1",
+    "license": "MIT",
+    "publishAs": "code-segment",
+    "segment": {
+        "destPath": "third_party/iowow"
+    },
+    "dirs": {},
+    "scripts": {},
+    "component": {
+        "name": "thirdparty_iowow",
+        "subsystem": "",
+        "syscap": [],
+        "features": [],
+        "adapted_system_type": [],
+        "rom": "",
+        "ram": "",
+        "deps": {
+            "components": [],
+            "third_party": []
+        },
+        "build": {
+            "sub_component": [],
+            "inner_kits": [],
+            "test": []
+        }
+    }
+}
