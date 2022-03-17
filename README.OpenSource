@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "IOWOW",
+    "License": "MIT License",
+    "License File": "LICENSE",
+    "Version Number": "1.4.10",
+    "Owner": "kutcher.zhou@huawei.com",
+    "Upstream URL": "https://github.com/Softmotions/iowow",
+    "Description": "The skiplist based persistent key/value storage engine"
+  }
+]
