@@ -10,8 +10,8 @@
     "dirs": {},
     "scripts": {},
     "component": {
-        "name": "thirdparty_iowow",
-        "subsystem": "",
+        "name": "iowow",
+        "subsystem": "thirdparty",
         "syscap": [],
         "features": [],
         "adapted_system_type": [],
@@ -22,7 +22,9 @@
             "third_party": []
         },
         "build": {
-            "sub_component": [],
+            "sub_component": [
+                "//third_party/iowow:iowow"
+            ],
             "inner_kits": [],
             "test": []
         }

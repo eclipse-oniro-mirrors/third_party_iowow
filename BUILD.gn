@@ -110,6 +110,6 @@ ohos_shared_library("iowow") {
     "src/utils/murmur3.c",
   ]
 
-  part_name = "hiview"
-  subsystem_name = "hiviewdfx"
+  part_name = "iowow"
+  subsystem_name = "thirdparty"
 }
