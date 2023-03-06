@@ -51,6 +51,7 @@ config("iowow_config") {
     "-Wno-unused-function",
     "-Wno-missing-field-initializers",
     "-Wno-missing-braces",
+    "-Wno-strict-prototypes",
     "-O3",
     "-DNDEBUG",
     "-U__ANDROID__",
