@@ -67,6 +67,8 @@ Note:If the text contains special characters, please escape them according to th
                 <filteritem type="filepath" name="release.sh" desc="the header of the file is not license" />
                 <filteritem type="filepath" name="src/bindings/ejdb2_flutter/ios/ejdb2_flutter.podspec" desc="the header of the file is not license" />
                 <filteritem type="filepath" name="src/utils/iwre.c" desc="the header of the file is not license" />
+                <filteritem type="filepath" name="src/utils/iwavl.h" desc="CC0 1.0 Universal" />
+                <filteritem type="filepath" name="src/utils/iwavl.c" desc="CC0 1.0 Universal" />
             </filefilter>
             <filefilter name="copyrightPolicyFilter" desc="Filters for copyright header policies">
             </filefilter>
@@ -202,6 +204,23 @@ Note:If the text contains special characters, please escape them according to th
                 appreciated but is not required.
 
                 THE SOFTWARE IS PROVIDED &gt;AS IS&gt;.  USE ENTIRELY AT YOUR OWN RISK."
+                desc=""/>
+            </licensematcher>
+            <licensematcher name="CC0 1.0 Universal" desc="">
+                <licensetext name="
+                Written in 2014-2016 by Eric Biggers &gt;ebiggers3@gmail.com&gt;
+
+                To the extent possible under law, the author(s) have dedicated all copyright
+                and related and neighboring rights to this software to the public domain
+                worldwide via the Creative Commons Zero 1.0 Universal Public Domain
+                Dedication (the &gt;CC0&gt;).
+
+                This software is distributed in the hope that it will be useful, but WITHOUT
+                ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+                FOR A PARTICULAR PURPOSE. See the CC0 for more details.
+
+                You should have received a copy of the CC0 along with this software; if not
+                see &gt;http://creativecommons.org/publicdomain/zero/1.0/&gt;."
                 desc=""/>
             </licensematcher>
         </licensematcherlist>

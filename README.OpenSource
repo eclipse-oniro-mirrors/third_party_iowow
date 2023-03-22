@@ -3,7 +3,7 @@
     "Name": "IOWOW",
     "License": "MIT License",
     "License File": "LICENSE",
-    "Version Number": "v1.4.15",
+    "Version Number": "v1.4.16",
     "Owner": "kutcher.zhou@huawei.com",
     "Upstream URL": "https://github.com/Softmotions/iowow",
     "Description": "The skiplist based persistent key/value storage engine"

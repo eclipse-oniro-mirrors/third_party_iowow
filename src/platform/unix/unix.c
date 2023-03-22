@@ -43,15 +43,18 @@
 #include <sys/prctl.h>
 #elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 #include <pthread_np.h>
+#include <sys/sysctl.h>
 #endif
 
 #ifdef __APPLE__
+#include <libproc.h>
+
 #define st_atim st_atimespec
 #define st_ctim st_ctimespec
 #define st_mtim st_mtimespec
 #endif
 
-#define _IW_TIMESPEC2MS(IW_ts) (((IW_ts).tv_sec * 1000ULL) + (uint64_t) round((IW_ts).tv_nsec / 1.0e6))
+#define _IW_TIMESPEC2MS(IW_ts) (((IW_ts).tv_sec * 1000ULL) + lround((IW_ts).tv_nsec / 1.0e6))
 
 IW_EXPORT iwrc iwp_clock_get_time(int clock_id, struct timespec *t) {
 #if (defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED < 101200)
@@ -296,7 +299,11 @@ iwrc iwp_sleep(uint64_t ms) {
   struct timespec req;
   req.tv_sec = ms / 1000UL;
   req.tv_nsec = (ms % 1000UL) * 1000UL * 1000UL;
-  if (nanosleep(&req, NULL)) {
+again:
+  if (nanosleep(&req, NULL) == -1) {
+    if (errno == EINTR) {
+      goto again;
+    }
     rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, errno);
   }
   return rc;
@@ -317,27 +324,37 @@ iwrc iwp_removedir(const char *path) {
   return 0;
 }
 
-iwrc iwp_exec_path(char *opath) {
-#ifdef __linux
-  pid_t pid;
-  char path[MAXPATHLEN];
-  char epath[MAXPATHLEN];
-  memset(epath, 0, sizeof(epath));
-  pid = getpid();
-  sprintf(path, "/proc/%d/exe", pid);
-  if (readlink(path, epath, MAXPATHLEN - 1) == -1) {
+iwrc iwp_exec_path(char *opath, size_t opath_maxlen) {
+ #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+  const int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+  if (sysctl(mib, 4, opath, &opath_maxlen, 0, 0) < 0) {
     return iwrc_set_errno(IW_ERROR_ERRNO, errno);
-  } else {
-    strncpy(opath, epath, MAXPATHLEN);
   }
   return 0;
+ #elif defined(__linux__)
+  char *path = "/proc/self/exe";
+  ssize_t ret = readlink(path, opath, opath_maxlen);
+  if (ret == -1) {
+    return iwrc_set_errno(IW_ERROR_ERRNO, errno);
+  } else if (ret < opath_maxlen) {
+    opath[ret] = '\0';
+  } else if (opath_maxlen > 0) {
+    opath[opath_maxlen - 1] = '\0';
+  }
+  return 0;
+#elif defined(__APPLE__)
+  pid_t pid = getpid();
+  int ret = proc_pidpath(pid, opath, opath_maxlen);
+  if (ret < 0) {
+    return iwrc_set_errno(IW_ERROR_ERRNO, errno);
+  }
 #else
-  // todo
+  // TODO:
   return IW_ERROR_NOT_IMPLEMENTED;
 #endif
 }
 
-uint16_t iwp_num_cpu_cores() {
+uint16_t iwp_num_cpu_cores(void) {
   long res = sysconf(_SC_NPROCESSORS_ONLN);
   return (uint16_t) (res > 0 ? res : 1);
 }
@@ -361,8 +378,20 @@ iwrc iwp_fdatasync(HANDLE fh) {
 }
 
 size_t iwp_tmpdir(char *out, size_t len) {
-  const char *tdir = P_tmpdir;
-  size_t tlen = strlen(P_tmpdir);
+  const char *tdir;
+#ifdef IW_TMPDIR
+  tdir = IW_TMPDIR;
+#else
+  tdir = getenv("TMPDIR");
+  if (!tdir) {
+  #ifdef P_tmpdir
+    tdir = P_tmpdir;
+  #else
+    tdir = "/tmp";
+  #endif
+  }
+#endif
+  size_t tlen = strlen(tdir);
   size_t nw = MIN(len, tlen);
   memcpy(out, tdir, nw);
   return nw;
@@ -389,7 +418,7 @@ void iwp_set_current_thread_name(const char *name) {
 #endif
 }
 
-static iwrc _iwp_init_impl() {
+static iwrc _iwp_init_impl(void) {
   iwp_page_size(); // init statics
   return 0;
 }

@@ -186,7 +186,7 @@ static iwrc _write_wl(IWAL *wal, const void *op, off_t oplen, const uint8_t *dat
     RCRET(rc);
     rc = iwp_write(wal->fh, data, (size_t) len);
     RCRET(rc);
-  } else {
+  } else if (len > 0){
     assert(bufsz - wal->bufpos >= len);
     memcpy(wal->buf + wal->bufpos, data, (size_t) len);
     wal->bufpos += len;
@@ -368,9 +368,9 @@ static void _last_fix_and_reset_points(IWAL *wal, uint8_t *wmm, off_t fsz, off_t
         rp += sizeof(WBRESIZE);
         break;
       }
-      case WOP_FIXPOINT: {
+      case WOP_SAVEPOINT: {
         *fpos = (rp - wmm);
-        rp += sizeof(WBFIXPOINT);
+        rp += sizeof(WBSAVEPOINT);
         break;
       }
       case WOP_RESET: {
@@ -549,16 +549,16 @@ static iwrc _rollforward_exl(IWAL *wal, IWFS_EXT *extf, int recover_mode) {
         RCGO(rc, finish);
         break;
       }
-      case WOP_FIXPOINT:
+      case WOP_SAVEPOINT:
         if (fpos == rp - wmm) { // last fixpoint to
-          WBFIXPOINT wb;
+          WBSAVEPOINT wb;
           memcpy(&wb, rp, sizeof(wb));
           iwlog_warn("Database recovered at point of time: %"
                      PRIu64
                      " ms since epoch\n", wb.ts);
           goto finish;
         }
-        rp += sizeof(WBFIXPOINT);
+        rp += sizeof(WBSAVEPOINT);
         break;
       case WOP_RESET: {
         rp += sizeof(WBRESET);
@@ -649,8 +649,8 @@ static iwrc _checkpoint_exl(IWAL *wal, uint64_t *tsp, bool no_fixpoint) {
   if (!no_fixpoint) {
     wal->force_cp = false;
     wal->force_sp = false;
-    WBFIXPOINT wb = {
-      .id = WOP_FIXPOINT
+    WBSAVEPOINT wb = {
+      .id = WOP_SAVEPOINT
     };
     rc = iwp_current_time_ms(&wb.ts, false);
     RCGO(rc, finish);
@@ -748,8 +748,8 @@ iwrc _savepoint_exl(IWAL *wal, uint64_t *tsp, bool sync) {
     *tsp = 0;
   }
   wal->force_sp = false;
-  WBFIXPOINT wbfp = {
-    .id = WOP_FIXPOINT
+  WBSAVEPOINT wbfp = {
+    .id = WOP_SAVEPOINT
   };
   iwrc rc = iwp_current_time_ms(&wbfp.ts, false);
   RCRET(rc);
@@ -837,7 +837,9 @@ static void* _cpt_worker_fn(void *op) {
     }
     tp.tv_sec += 1; // one sec tick
     tick_ts = tp.tv_sec * 1000 + (uint64_t) round(tp.tv_nsec / 1.0e6);
-    rci = pthread_cond_timedwait(wal->cpt_condp, wal->mtxp, &tp);
+    do {
+      rci = pthread_cond_timedwait(wal->cpt_condp, wal->mtxp, &tp);
+    } while (rci == EINTR);
     if (rci && (rci != ETIMEDOUT)) {
       rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, rci);
       _unlock(wal);

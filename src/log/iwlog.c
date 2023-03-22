@@ -39,15 +39,6 @@
 #include <time.h>
 #include <limits.h>
 
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__ANDROID__) || !_GNU_SOURCE
-#include <libgen.h>
-#elif defined(_WIN32)
-#include <libiberty/libiberty.h>
-#else
-#include <string.h>
-#endif
-
-
 #ifdef __ANDROID__
 #define IW_ANDROID_LOG
 #include <android/log.h>
@@ -289,6 +280,14 @@ static const char* _default_ecodefn(locale_t locale, uint32_t ecode) {
       return "Action is not allowed. (IW_ERROR_NOT_ALLOWED)";
     case IW_ERROR_UNSUPPORTED:
       return "Unsupported opration. (IW_ERROR_UNSUPPORTED)";
+    case IW_ERROR_EOF:
+      return "End of IO stream/file (IW_ERROR_EOF)";
+    case IW_ERROR_UNEXPECTED_INPUT:
+      return "Unexpected input/data (IW_ERROR_UNEXPECTED_INPUT)";
+    case IW_ERROR_IO:
+      return "IO error (IW_ERROR_IO)";
+    case IW_ERROR_INVALID_CONFIG:
+      return "Invalid configuration (IW_ERROR_INVALID_CONFIG)";
     case IW_OK:
     default:
       return 0;
@@ -397,6 +396,7 @@ static iwrc _default_logfn(
       cat = "DEBUG";
 #endif
       break;
+
     case IWLOG_INFO:
 #ifdef IW_ANDROID_LOG
       alp = ANDROID_LOG_INFO;
@@ -405,6 +405,17 @@ static iwrc _default_logfn(
 #endif
       file = 0;
       break;
+
+    case IWLOG_VERBOSE:
+#ifdef IW_ANDROID_LOG
+      alp = ANDROID_LOG_INFO;
+#else
+      cat = "VERBOSE";
+#endif
+      file = 0;
+      break;
+
+
     case IWLOG_WARN:
 #ifdef IW_ANDROID_LOG
       alp = ANDROID_LOG_WARN;
@@ -412,6 +423,7 @@ static iwrc _default_logfn(
       cat = "WARN";
 #endif
       break;
+
     case IWLOG_ERROR:
 #ifdef IW_ANDROID_LOG
       alp = ANDROID_LOG_ERROR;
@@ -419,6 +431,7 @@ static iwrc _default_logfn(
       cat = "ERROR";
 #endif
       break;
+
     default:
 #ifndef IW_ANDROID_LOG
       cat = "UNKNOW";
@@ -438,11 +451,7 @@ static iwrc _default_logfn(
       fnameptr = strdup(file);
       RCA(fnameptr, finish);
     }
-#if defined(IW_HAVE_BASENAME_R) && defined(__FreeBSD__)
-    fname = basename_r(file, fnameptr);
-#else
-    fname = basename(fnameptr); // NOLINT
-#endif
+    fname = iwp_basename(fnameptr);
   }
 
   if (pthread_mutex_lock(&_mtx)) {

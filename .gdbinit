@@ -1,6 +1,8 @@
-cd ./build/src/utils/tests
+cd ./build/src/fs/tests
+file ./iwfs_test2
 #set args -c
 
+set confirm off
 set follow-fork-mode parent
 set detach-on-fork on
 set print elements 4096

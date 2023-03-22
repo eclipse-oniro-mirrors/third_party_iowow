@@ -17,10 +17,12 @@ config("iowow_public_config") {
   include_dirs = [
     "//third_party/iowow/src",
     "//third_party/iowow/src/fs",
+    "//third_party/iowow/src/json",
     "//third_party/iowow/src/kv",
     "//third_party/iowow/src/log",
     "//third_party/iowow/src/platform",
     "//third_party/iowow/src/rdb",
+    "//third_party/iowow/src/re",
     "//third_party/iowow/src/utils",
   ]
 }
@@ -29,10 +31,12 @@ config("iowow_config") {
   include_dirs = [
     "//third_party/iowow/src",
     "//third_party/iowow/src/fs",
+    "//third_party/iowow/src/json",
     "//third_party/iowow/src/kv",
     "//third_party/iowow/src/log",
     "//third_party/iowow/src/platform",
     "//third_party/iowow/src/rdb",
+    "//third_party/iowow/src/re",
     "//third_party/iowow/src/utils",
   ]
 
@@ -90,19 +94,25 @@ ohos_shared_library("iowow") {
     "src/fs/iwfs.c",
     "src/fs/iwfsmfile.c",
     "src/iowow.c",
+    "src/json/iwbinn.c",
+    "src/json/iwjser.c",
+    "src/json/iwjson.c",
     "src/kv/iwal.c",
     "src/kv/iwkv.c",
     "src/log/iwlog.c",
     "src/platform/iwp.c",
     "src/rdb/iwrdb.c",
+    "src/re/compile.c",
+    "src/re/iwre.c",
+    "src/re/parse.c",
+    "src/re/vm.c",
     "src/utils/iwarr.c",
+    "src/utils/iwavl.c",
     "src/utils/iwconv.c",
     "src/utils/iwhmap.c",
+    "src/utils/iwini.c",
     "src/utils/iwpool.c",
     "src/utils/iwrb.c",
-    "src/utils/iwre.c",
-    "src/utils/iwsha2.c",
-    "src/utils/iwstree.c",
     "src/utils/iwstw.c",
     "src/utils/iwth.c",
     "src/utils/iwtp.c",
@@ -111,6 +121,7 @@ ohos_shared_library("iowow") {
     "src/utils/iwxstr.c",
     "src/utils/mt19937ar.c",
     "src/utils/murmur3.c",
+    "src/utils/utf8proc.c",
   ]
 
   part_name = "iowow"

@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <stdarg.h>
 #include <errno.h>
 
 // Default IWXSTR initial size
@@ -45,15 +44,46 @@ IWXSTR* iwxstr_new(void) {
   return iwxstr_new2(IWXSTR_AUNIT);
 }
 
-IWXSTR* iwxstr_wrap(const char *buf, size_t size) {
-  IWXSTR *xstr = iwxstr_new2(size + 1);
+IWXSTR* iwxstr_new_clone(const IWXSTR *xstr) {
+  IWXSTR *ret = malloc(sizeof(*ret));
+  if (!ret) {
+    return 0;
+  }
+  ret->user_data = 0;
+  ret->user_data_free_fn = 0;
+  ret->size = xstr->size;
+  ret->asize = xstr->asize;
+  ret->ptr = malloc(xstr->asize);
+  if (!ret->ptr) {
+    free(ret);
+    return 0;
+  }
+  if (xstr->size) {
+    memcpy(ret->ptr, xstr->ptr, xstr->size);
+  }
+  return ret;
+}
+
+IWXSTR* iwxstr_wrap(char *buf, size_t size, size_t asize) {
+  IWXSTR *xstr = malloc(sizeof(*xstr));
   if (!xstr) {
     return 0;
   }
-  if (iwxstr_cat(xstr, buf, size)) {
-    iwxstr_destroy(xstr);
-    return 0;
+  xstr->user_data = 0;
+  xstr->user_data_free_fn = 0;
+  xstr->size = size;
+  xstr->asize = asize;
+  xstr->ptr = buf;
+
+  if (size >= asize) {
+    xstr->ptr = realloc(buf, size + 1);
+    if (!xstr->ptr) {
+      free(xstr);
+      return 0;
+    }
+    xstr->asize = size + 1;
   }
+  xstr->ptr[size] = '\0';
   return xstr;
 }
 
@@ -68,14 +98,16 @@ void iwxstr_destroy(IWXSTR *xstr) {
   free(xstr);
 }
 
-void iwxstr_destroy_keep_ptr(IWXSTR *xstr) {
+char* iwxstr_destroy_keep_ptr(IWXSTR *xstr) {
   if (!xstr) {
-    return;
+    return 0;
   }
+  char *ptr = xstr->ptr;
   if (xstr->user_data_free_fn) {
     xstr->user_data_free_fn(xstr->user_data);
   }
   free(xstr);
+  return ptr;
 }
 
 void iwxstr_clear(IWXSTR *xstr) {
@@ -95,7 +127,7 @@ iwrc iwxstr_cat(IWXSTR *xstr, const void *buf, size_t size) {
     }
     char *ptr = realloc(xstr->ptr, xstr->asize);
     if (!ptr) {
-      return IW_ERROR_ERRNO;
+      return IW_ERROR_ALLOC;
     }
     xstr->ptr = ptr;
   }
@@ -116,7 +148,7 @@ iwrc iwxstr_set_size(IWXSTR *xstr, size_t size) {
     }
     char *ptr = realloc(xstr->ptr, xstr->asize);
     if (!ptr) {
-      return IW_ERROR_ERRNO;
+      return IW_ERROR_ALLOC;
     }
     xstr->ptr = ptr;
   }
@@ -139,7 +171,7 @@ iwrc iwxstr_unshift(IWXSTR *xstr, const void *buf, size_t size) {
     }
     char *ptr = realloc(xstr->ptr, xstr->asize);
     if (!ptr) {
-      return IW_ERROR_ERRNO;
+      return IW_ERROR_ALLOC;
     }
     xstr->ptr = ptr;
   }
@@ -178,7 +210,34 @@ void iwxstr_pop(IWXSTR *xstr, size_t pop_size) {
   xstr->ptr[xstr->size] = '\0';
 }
 
-static iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list va) {
+iwrc iwxstr_insert(IWXSTR *xstr, size_t pos, const void *buf, size_t size) {
+  if (pos > xstr->size) {
+    return IW_ERROR_OUT_OF_BOUNDS;
+  }
+  if (size == 0) {
+    return 0;
+  }
+  size_t nsize = xstr->size + size + 1;
+  if (xstr->asize < nsize) {
+    while (xstr->asize < nsize) {
+      xstr->asize <<= 1;
+      if (xstr->asize < nsize) {
+        xstr->asize = nsize;
+      }
+    }
+    char *ptr = realloc(xstr->ptr, xstr->asize);
+    if (!ptr) {
+      return IW_ERROR_ALLOC;
+    }
+    xstr->ptr = ptr;
+  }
+  memmove(xstr->ptr + pos + size, xstr->ptr + pos, xstr->size - pos + 1 /* \0 */);
+  memcpy(xstr->ptr + pos, buf, size);
+  xstr->size += size;
+  return IW_OK;
+}
+
+iwrc iwxstr_insert_vaprintf(IWXSTR *xstr, size_t pos, const char *format, va_list va) {
   iwrc rc = 0;
   char buf[1024];
   va_list cva;
@@ -188,6 +247,43 @@ static iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list va) {
   if (len >= sizeof(buf)) {
     RCA(wp = malloc(len + 1), finish);
     len = vsnprintf(wp, len + 1, format, cva);
+    if (len < 0) {
+      rc = IW_ERROR_FAIL;
+      goto finish;
+    }
+  }
+  rc = iwxstr_insert(xstr, pos, wp, len);
+
+finish:
+  va_end(cva);
+  if (wp != buf) {
+    free(wp);
+  }
+  return rc;
+}
+
+iwrc iwxstr_insert_printf(IWXSTR *xstr, size_t pos, const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  iwrc rc = iwxstr_insert_vaprintf(xstr, pos, format, ap);
+  va_end(ap);
+  return rc;
+}
+
+iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list va) {
+  iwrc rc = 0;
+  char buf[1024];
+  va_list cva;
+  va_copy(cva, va);
+  char *wp = buf;
+  int len = vsnprintf(wp, sizeof(buf), format, va);
+  if (len >= sizeof(buf)) {
+    RCA(wp = malloc(len + 1), finish);
+    len = vsnprintf(wp, len + 1, format, cva);
+    if (len < 0) {
+      rc = IW_ERROR_FAIL;
+      goto finish;
+    }
   }
   rc = iwxstr_cat(xstr, wp, len);
 
@@ -205,6 +301,22 @@ iwrc iwxstr_printf(IWXSTR *xstr, const char *format, ...) {
   iwrc rc = iwxstr_vaprintf(xstr, format, ap);
   va_end(ap);
   return rc;
+}
+
+IWXSTR* iwxstr_new_printf(const char *format, ...) {
+  IWXSTR *xstr = iwxstr_new();
+  if (!xstr) {
+    return 0;
+  }
+  va_list ap;
+  va_start(ap, format);
+  iwrc rc = iwxstr_vaprintf(xstr, format, ap);
+  va_end(ap);
+  if (rc) {
+    iwxstr_destroy(xstr);
+    return 0;
+  }
+  return xstr;
 }
 
 char* iwxstr_ptr(IWXSTR *xstr) {
