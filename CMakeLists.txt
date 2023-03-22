@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 include(CMakeToolsHelpers OPTIONAL)
@@ -121,8 +121,9 @@ if(CPACK_GENERATORS)
             "\\\\.workspace$"
             "\\\\.iml$"
             "\\\\.mk$"
-            "\\\\.astylerc$"
             "\\\\.editorconfig$"
+            "\\\\.astylerc$"
+            "uncrustify\\\\.cfg$"
             "/Makefile$"
     )
     set(PROJECT_ARCH "${CMAKE_SYSTEM_PROCESSOR}")

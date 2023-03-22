@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +54,7 @@ void iwlog_test1() {
 }
 
 void iwlog_test2() {
-  IWLOG_DEFAULT_OPTS opts = {0};
+  IWLOG_DEFAULT_OPTS opts = { 0 };
   int rv = 0;
   size_t sz;
   char fname[] = "iwlog_test1_XXXXXX";
@@ -66,7 +66,7 @@ void iwlog_test2() {
   fprintf(stderr, "Redirecting log to: %s" IW_LINE_SEP, fname);
 
   opts.out = out;
-  iwlog_set_logfn_opts(&opts);
+  iwlog_set_logfn(0, &opts);
 
   iwlog_info2("7fa79c75beac413d83f35ffb6bf571b9");
   iwlog_error("7e94f7214af64513b30ab4df3f62714a%s", "C");
@@ -95,7 +95,8 @@ void iwlog_test2() {
                                 "status set. (IW_ERROR_ERRNO)|"));
   CU_ASSERT_PTR_NOT_NULL(strstr(buf, "ERRNO Message"));
   CU_ASSERT_PTR_NOT_NULL(strstr(buf, "ERROR iwlog_test1.c:"));
-  CU_ASSERT_PTR_NOT_NULL(strstr(buf, "70004|0|0|Resource is readonly. (IW_ERROR_READONLY)|"));
+
+  CU_ASSERT_PTR_NOT_NULL(strstr(buf, "70005|0|0|Resource is readonly. (IW_ERROR_READONLY)|"));
   CU_ASSERT_PTR_NOT_NULL(strstr(buf, "c94645c3b107433497ef295b1c00dcff12"));
 
   fclose(out);
@@ -106,8 +107,9 @@ int main() {
   CU_pSuite pSuite = NULL;
 
   /* Initialize the CUnit test registry */
-  if (CUE_SUCCESS != CU_initialize_registry())
+  if (CUE_SUCCESS != CU_initialize_registry()) {
     return CU_get_error();
+  }
 
   /* Add a suite to the registry */
   pSuite = CU_add_suite("iwlog_test1", init_suite, clean_suite);
@@ -118,8 +120,8 @@ int main() {
   }
 
   /* Add the tests to the suite */
-  if ((NULL == CU_add_test(pSuite, "iwlog_test1", iwlog_test1)) ||
-      (NULL == CU_add_test(pSuite, "iwlog_test2", iwlog_test2))) {
+  if (  (NULL == CU_add_test(pSuite, "iwlog_test1", iwlog_test1))
+     || (NULL == CU_add_test(pSuite, "iwlog_test2", iwlog_test2))) {
     CU_cleanup_registry();
     return CU_get_error();
   }

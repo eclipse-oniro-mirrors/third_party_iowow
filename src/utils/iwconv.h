@@ -7,7 +7,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +41,8 @@ IW_EXPORT int64_t iwatoi(const char *str);
 
 IW_EXPORT long double iwatof(const char *str);
 
+IW_EXPORT double iwstrtod(const char *str, char **end);
+
 IW_EXPORT int iwitoa(int64_t v, char *buf, int max);
 
 /**
@@ -56,6 +58,12 @@ IW_EXPORT char* iwftoa(long double v, char buf[static IWFTOA_BUFSIZE]);
 IW_EXPORT int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz);
 
 IW_EXPORT size_t iwhex2bin(const char *hex, int hexlen, char *out, int max);
+
+IW_EXPORT char* iwbin2hex(
+  char* const                hex,
+  const size_t               hex_maxlen,
+  const unsigned char* const bin,
+  const size_t               bin_len);
 
 IW_EXTERN_C_END
 

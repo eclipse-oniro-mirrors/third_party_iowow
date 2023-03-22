@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ftw.h>
+#include <pthread.h>
 
+#if defined(__linux__)
+#include <sys/prctl.h>
+#elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
+#include <pthread_np.h>
+#endif
 
 #ifdef __APPLE__
 #define st_atim st_atimespec
@@ -47,7 +53,6 @@
 
 #define _IW_TIMESPEC2MS(IW_ts) (((IW_ts).tv_sec * 1000ULL) + (uint64_t) round((IW_ts).tv_nsec / 1.0e6))
 
-
 IW_EXPORT iwrc iwp_clock_get_time(int clock_id, struct timespec *t) {
 #if (defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED < 101200)
   struct timeval now;
@@ -55,7 +60,7 @@ IW_EXPORT iwrc iwp_clock_get_time(int clock_id, struct timespec *t) {
   if (rci) {
     return iwrc_set_errno(IW_ERROR_ERRNO, errno);
   }
-  t->tv_sec  = now.tv_sec;
+  t->tv_sec = now.tv_sec;
   t->tv_nsec = now.tv_usec * 1000ULL;
 #else
   int rci = clock_gettime(clock_id, t);
@@ -84,7 +89,7 @@ iwrc iwp_current_time_ms(uint64_t *time, bool monotonic) {
 static iwrc _iwp_fstat(const char *path, HANDLE fd, IWP_FILE_STAT *fs) {
   assert(fs);
   iwrc rc = 0;
-  struct stat st = {0};
+  struct stat st = { 0 };
   memset(fs, 0, sizeof(*fs));
   if (path) {
     if (stat(path, &st)) {
@@ -127,7 +132,7 @@ iwrc iwp_flock(HANDLE fh, iwp_lockmode lmode) {
   if (lmode == IWP_NOLOCK) {
     return 0;
   }
-  struct flock lock = {.l_type = (lmode & IWP_WLOCK) ? F_WRLCK : F_RDLCK, .l_whence = SEEK_SET};
+  struct flock lock = { .l_type = (lmode & IWP_WLOCK) ? F_WRLCK : F_RDLCK, .l_whence = SEEK_SET };
   while (fcntl(fh, (lmode & IWP_NBLOCK) ? F_SETLK : F_SETLKW, &lock) == -1) {
     if (errno != EINTR) {
       return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
@@ -140,7 +145,7 @@ iwrc iwp_unlock(HANDLE fh) {
   if (INVALIDHANDLE(fh)) {
     return IW_ERROR_INVALID_HANDLE;
   }
-  struct flock lock = {.l_type = F_UNLCK, .l_whence = SEEK_SET};
+  struct flock lock = { .l_type = F_UNLCK, .l_whence = SEEK_SET };
   while (fcntl(fh, F_SETLKW, &lock) == -1) {
     if (errno != EINTR) {
       return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
@@ -160,90 +165,73 @@ iwrc iwp_closefh(HANDLE fh) {
 }
 
 iwrc iwp_pread(HANDLE fh, off_t off, void *buf, size_t siz, size_t *sp) {
-  if (INVALIDHANDLE(fh)) {
-    return IW_ERROR_INVALID_HANDLE;
-  }
-  if (!buf || !sp) {
-    return IW_ERROR_INVALID_ARGS;
-  }
-  ssize_t rs;
+  ssize_t rci;
+
 again:
-  rs = pread(fh, buf, siz, off);
-  if (rs == -1) {
+  rci = pread(fh, buf, siz, off);
+  if (rci < 0) {
+    *sp = 0;
     if (errno == EINTR) {
       goto again;
+    } else if (errno == EWOULDBLOCK || errno == IW_ERROR_AGAIN) {
+      return IW_ERROR_AGAIN;
     }
-    *sp = 0;
     return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-  } else {
-    *sp = rs;
-    return 0;
   }
+  *sp = rci;
+  return 0;
 }
 
 iwrc iwp_read(HANDLE fh, void *buf, size_t count, size_t *sp) {
-  if (INVALIDHANDLE(fh)) {
-    return IW_ERROR_INVALID_HANDLE;
-  }
-  if (!buf || !sp) {
-    return IW_ERROR_INVALID_ARGS;
-  }
   ssize_t rs;
+
 again:
   rs = read(fh, buf, count);
-  if (rs == -1) {
+  if (rs < 0) {
+    *sp = 0;
     if (errno == EINTR) {
       goto again;
+    } else if (errno == EWOULDBLOCK || errno == EAGAIN) {
+      return IW_ERROR_AGAIN;
     }
-    *sp = 0;
     return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-  } else {
-    *sp = rs;
-    return 0;
   }
+  *sp = rs;
+  return 0;
 }
 
 iwrc iwp_pwrite(HANDLE fh, off_t off, const void *buf, size_t siz, size_t *sp) {
-  if (INVALIDHANDLE(fh)) {
-    return IW_ERROR_INVALID_HANDLE;
-  }
-  if (!buf || !sp) {
-    return IW_ERROR_INVALID_ARGS;
-  }
   ssize_t ws;
+
 again:
   ws = pwrite(fh, buf, siz, off);
-  if (ws == -1) {
+  if (ws < 0) {
+    *sp = 0;
     if (errno == EINTR) {
       goto again;
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return IW_ERROR_AGAIN;
     }
-    *sp = 0;
     return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-  } else {
-    *sp = ws;
-    return 0;
   }
+  *sp = ws;
+  return 0;
 }
 
 iwrc iwp_write(HANDLE fh, const void *buf, size_t size) {
-  if (INVALIDHANDLE(fh)) {
-    return IW_ERROR_INVALID_HANDLE;
-  }
   const char *rp = buf;
   do {
     ssize_t wb = write(fh, rp, size);
-    switch (wb) {
-      case -1:
-        if (errno == EINTR) {
-          continue;
-        }
-        return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-      case 0:
-        break;
-      default:
-        rp += wb;
-        size -= wb;
-        break;
+    if (wb < 0) {
+      if (errno == EINTR) {
+        continue;
+      } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        return IW_ERROR_AGAIN;
+      }
+      return iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
+    } else {
+      rp += wb;
+      size -= wb;
     }
   } while (size > 0);
   return 0;
@@ -291,19 +279,16 @@ iwrc iwp_ftruncate(HANDLE fh, off_t len) {
 }
 
 iwrc iwp_fallocate(HANDLE fh, off_t len) {
-#ifndef __APPLE__
-  int rci = posix_fallocate(fh, 0, len);
-  return !rci ? 0 : iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-#else
+#if defined(__APPLE__)
   fstore_t fstore = {
-    .fst_flags = F_ALLOCATECONTIG,
+    .fst_flags   = F_ALLOCATECONTIG,
     .fst_posmode = F_PEOFPOSMODE,
-    .fst_length = len
+    .fst_length  = len
   };
   fcntl(fh, F_PREALLOCATE, &fstore);
+#endif
   int rci = ftruncate(fh, len);
   return !rci ? 0 : iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
-#endif
 }
 
 iwrc iwp_sleep(uint64_t ms) {
@@ -354,7 +339,7 @@ iwrc iwp_exec_path(char *opath) {
 
 uint16_t iwp_num_cpu_cores() {
   long res = sysconf(_SC_NPROCESSORS_ONLN);
-  return (uint16_t)(res > 0 ? res : 1);
+  return (uint16_t) (res > 0 ? res : 1);
 }
 
 iwrc iwp_fsync(HANDLE fh) {
@@ -376,23 +361,32 @@ iwrc iwp_fdatasync(HANDLE fh) {
 }
 
 size_t iwp_tmpdir(char *out, size_t len) {
-  const char *tdir;
-#ifdef IW_TMPDIR
-  tdir = IW_TMPDIR;
-#else
-  tdir = getenv("TMPDIR");
-  if (!tdir) {
-  #ifdef P_tmpdir
-    tdir = P_tmpdir;
-  #else
-    tdir = "/tmp";
-  #endif
-  }
-#endif
-  size_t tlen = strlen(tdir);
+  const char *tdir = P_tmpdir;
+  size_t tlen = strlen(P_tmpdir);
   size_t nw = MIN(len, tlen);
   memcpy(out, tdir, nw);
   return nw;
+}
+
+void iwp_set_current_thread_name(const char *name) {
+#if (defined(__APPLE__) && defined(__MACH__)) || defined(__linux__)
+  // On linux and OS X the name may not be longer than 16 bytes, including
+  // the null terminator. Truncate the name to 15 characters.
+  char buf[16];
+  strncpy(buf, name, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = '\0';
+  name = buf;
+#endif
+
+#if defined(__linux__)
+  prctl(PR_SET_NAME, name);
+#elif defined(__NetBSD__)
+  rv = pthread_setname_np(pthread_self(), "%s", (void*) name);
+#elif defined(__APPLE__)
+  pthread_setname_np(name);
+#else
+  pthread_setname_np(pthread_self(), name);
+#endif
 }
 
 static iwrc _iwp_init_impl() {

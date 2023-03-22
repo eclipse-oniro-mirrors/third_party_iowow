@@ -2,6 +2,8 @@
 #include <math.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
+#include <errno.h>
 
 // mapping of ASCII characters to hex values
 const uint8_t ascii2hex[] = {
@@ -52,19 +54,49 @@ size_t iwhex2bin(const char *hex, int hexlen, char *out, int max) {
       idx1 = hex[pos + 1];
       pos += 2;
     }
-    out[vpos++] = (uint8_t)(ascii2hex[idx0] << 4) | ascii2hex[idx1];
+    out[vpos++] = (uint8_t) (ascii2hex[idx0] << 4) | ascii2hex[idx1];
     if (vpos >= max) {
       return vpos;
     }
-  };
+  }
+  ;
   return vpos;
+}
+
+char* iwbin2hex(
+  char* const                hex,
+  const size_t               hex_maxlen,
+  const unsigned char* const bin,
+  const size_t               bin_len) {
+
+  size_t i = (size_t) 0U;
+  unsigned int x;
+  int b;
+  int c;
+
+  if ((bin_len >= SIZE_MAX / 2) || (hex_maxlen <= bin_len * 2U)) {
+    //errx(2, "bin2hex length wrong");
+    return 0;
+  }
+  while (i < bin_len) {
+    c = bin[i] & 0xf;
+    b = bin[i] >> 4;
+    x = (unsigned char) (87U + c + (((c - 10U) >> 8) & ~38U)) << 8
+        | (unsigned char) (87U + b + (((b - 10U) >> 8) & ~38U));
+    hex[i * 2U] = (char) x;
+    x >>= 8;
+    hex[i * 2U + 1U] = (char) x;
+    i++;
+  }
+  hex[i * 2U] = 0U;
+  return hex;
 }
 
 int iwitoa(int64_t v, char *buf, int max) {
 #define ITOA_SZSTEP(_step) if ((ret += (_step)) >= max) { \
     *ptr = 0; \
     return ret; \
-  }
+}
   int ret = 0;
   char c, *ptr = buf, *p, *p1;
   if (!v) {
@@ -77,7 +109,7 @@ int iwitoa(int64_t v, char *buf, int max) {
   if (v < 0) {
     v = -v;
     ITOA_SZSTEP(1)
-    *ptr++ = '-';
+    * ptr++ = '-';
   }
   // save start pointer
   p = ptr;
@@ -104,7 +136,7 @@ int iwitoa(int64_t v, char *buf, int max) {
 #undef ITOA_SZSTEP
 }
 
-char *iwftoa(long double n, char s[static IWFTOA_BUFSIZE]) {
+char* iwftoa(long double n, char s[static IWFTOA_BUFSIZE]) {
   static double PRECISION = 0.00000000000001;
   // handle special cases
   if (isnan(n)) {
@@ -141,12 +173,12 @@ char *iwftoa(long double n, char s[static IWFTOA_BUFSIZE]) {
     // convert the number
     while (n > PRECISION || m >= 0) {
       double weight = pow(10.0, m);
-      if (weight > 0 && !isinf(weight)) {
+      if ((weight > 0) && !isinf(weight)) {
         digit = (int) floorl(n / weight);
         n -= (digit * weight);
         *(c++) = '0' + digit;
       }
-      if (m == 0 && n > 0) {
+      if ((m == 0) && (n > 0)) {
         *(c++) = '.';
       }
       m--;
@@ -193,9 +225,13 @@ int64_t iwatoi(const char *str) {
   } else if (*str == '+') {
     str++;
   }
-  if (!strcmp(str, "inf")) return (INT64_MAX * sign);
+  if (!strcmp(str, "inf")) {
+    return (INT64_MAX * sign);
+  }
   while (*str != '\0') {
-    if (*str < '0' || *str > '9') break;
+    if ((*str < '0') || (*str > '9')) {
+      break;
+    }
     num = num * 10 + *str - '0';
     str++;
   }
@@ -219,7 +255,7 @@ long double iwatof(const char *str) {
   }
   long double num = 0;
   while (*str != '\0') {
-    if (*str < '0' || *str > '9') {
+    if ((*str < '0') || (*str > '9')) {
       break;
     }
     num = num * 10 + *str - '0';
@@ -230,7 +266,7 @@ long double iwatof(const char *str) {
     long double fract = 0.0;
     long double base = 10;
     while (*str != '\0') {
-      if (*str < '0' || *str > '9') {
+      if ((*str < '0') || (*str > '9')) {
         break;
       }
       fract += (*str - '0') / base;
@@ -239,7 +275,7 @@ long double iwatof(const char *str) {
     }
     num += fract;
   }
-  if (*str == 'e' || *str == 'E') {
+  if ((*str == 'e') || (*str == 'E')) {
     str++;
     num *= pow(10, iwatoi(str));
   }
@@ -250,8 +286,8 @@ long double iwatof(const char *str) {
  * Compare two strings as real numbers
  */
 int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
-  const unsigned char *arp = (const unsigned char *) aptr;
-  const unsigned char *brp = (const unsigned char *) bptr;
+  const unsigned char *arp = (const unsigned char*) aptr;
+  const unsigned char *brp = (const unsigned char*) bptr;
   int alen = asiz, blen = bsiz;
   int64_t anum = 0, bnum = 0;
   int asign = 1, bsign = 1;
@@ -261,14 +297,16 @@ int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
     arp++;
     alen--;
   }
-  if (alen > 0 && *arp == '-') {
+  if ((alen > 0) && (*arp == '-')) {
     arp++;
     alen--;
     asign = -1;
   }
   while (alen > 0) {
     int c = *arp;
-    if (c < '0' || c > '9') break;
+    if ((c < '0') || (c > '9')) {
+      break;
+    }
     anum = anum * 10 + c - '0';
     arp++;
     alen--;
@@ -280,31 +318,41 @@ int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
     brp++;
     blen--;
   }
-  if (blen > 0 && *brp == '-') {
+  if ((blen > 0) && (*brp == '-')) {
     brp++;
     blen--;
     bsign = -1;
   }
   while (blen > 0) {
     int c = *brp;
-    if (c < '0' || c > '9') break;
+    if ((c < '0') || (c > '9')) {
+      break;
+    }
     bnum = bnum * 10 + c - '0';
     brp++;
     blen--;
   }
   bnum *= bsign;
-  if (anum < bnum) return -1;
-  if (anum > bnum) return 1;
-  if ((alen > 1 && *arp == '.') || (blen > 1 && *brp == '.')) {
+  if (anum < bnum) {
+    return -1;
+  }
+  if (anum > bnum) {
+    return 1;
+  }
+  if (((alen > 1) && (*arp == '.')) || ((blen > 1) && (*brp == '.'))) {
     long double aflt = 0;
     long double bflt = 0;
-    if (alen > 1 && *arp == '.') {
+    if ((alen > 1) && (*arp == '.')) {
       arp++;
       alen--;
-      if (alen > IWFTOA_BUFSIZE) alen = IWFTOA_BUFSIZE;
+      if (alen > IWFTOA_BUFSIZE) {
+        alen = IWFTOA_BUFSIZE;
+      }
       long double base = 10;
       while (alen > 0) {
-        if (*arp < '0' || *arp > '9') break;
+        if ((*arp < '0') || (*arp > '9')) {
+          break;
+        }
         aflt += (*arp - '0') / base;
         arp++;
         alen--;
@@ -312,13 +360,17 @@ int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
       }
       aflt *= asign;
     }
-    if (blen > 1 && *brp == '.') {
+    if ((blen > 1) && (*brp == '.')) {
       brp++;
       blen--;
-      if (blen > IWFTOA_BUFSIZE) blen = IWFTOA_BUFSIZE;
+      if (blen > IWFTOA_BUFSIZE) {
+        blen = IWFTOA_BUFSIZE;
+      }
       long double base = 10;
       while (blen > 0) {
-        if (*brp < '0' || *brp > '9') break;
+        if ((*brp < '0') || (*brp > '9')) {
+          break;
+        }
         bflt += (*brp - '0') / base;
         brp++;
         blen--;
@@ -326,8 +378,12 @@ int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
       }
       bflt *= bsign;
     }
-    if (aflt < bflt) return -1;
-    if (aflt > bflt) return 1;
+    if (aflt < bflt) {
+      return -1;
+    }
+    if (aflt > bflt) {
+      return 1;
+    }
   }
   int rv = strncmp(aptr, bptr, MIN(asiz, bsiz));
   if (!rv) {
@@ -335,4 +391,121 @@ int iwafcmp(const char *aptr, int asiz, const char *bptr, int bsiz) {
   } else {
     return rv;
   }
+}
+
+/// MIT Licensed
+/// Taken https://github.com/mattn/strtod/blob/master/strtod.c
+
+static const char* skipwhite(const char *q) {
+  const char *p = q;
+  while (isspace(*p)) {
+    ++p;
+  }
+  return p;
+}
+
+double iwstrtod(const char *str, char **end) {
+  double d = 0.0;
+  int sign;
+  int n = 0;
+  const char *p, *a;
+
+  a = p = str;
+  p = skipwhite(p);
+
+  /* decimal part */
+  sign = 1;
+  if (*p == '-') {
+    sign = -1;
+    ++p;
+  } else if (*p == '+') {
+    ++p;
+  }
+  if (isdigit(*p)) {
+    d = (double) (*p++ - '0');
+    while (*p && isdigit(*p)) {
+      d = d * 10.0 + (double) (*p - '0');
+      ++p;
+      ++n;
+    }
+    a = p;
+  } else if (*p != '.') {
+    goto done;
+  }
+  d *= sign;
+
+  /* fraction part */
+  if (*p == '.') {
+    double f = 0.0;
+    double base = 0.1;
+    ++p;
+
+    if (isdigit(*p)) {
+      while (*p && isdigit(*p)) {
+        f += base * (*p - '0');
+        base /= 10.0;
+        ++p;
+        ++n;
+      }
+    }
+    d += f * sign;
+    a = p;
+  }
+
+  /* exponential part */
+  if ((*p == 'E') || (*p == 'e')) {
+    int e = 0;
+    ++p;
+
+    sign = 1;
+    if (*p == '-') {
+      sign = -1;
+      ++p;
+    } else if (*p == '+') {
+      ++p;
+    }
+
+    if (isdigit(*p)) {
+      while (*p == '0') {
+        ++p;
+      }
+      if (*p == '\0') {
+        --p;
+      }
+      e = (*p++ - '0');
+      while (*p && isdigit(*p)) {
+        e = e * 10 + (*p - '0');
+        ++p;
+      }
+      e *= sign;
+    } else if (!isdigit(*(a - 1))) {
+      a = str;
+      goto done;
+    } else if (*p == 0) {
+      goto done;
+    }
+
+    if (d == 2.2250738585072011 && e == -308) {
+      d = 0.0;
+      a = p;
+      errno = ERANGE;
+      goto done;
+    }
+    if (d == 2.2250738585072012 && e <= -308) {
+      d *= 1.0e-308;
+      a = p;
+      goto done;
+    }
+    d *= pow(10.0, (double) e);
+    a = p;
+  } else if (p > str && !isdigit(*(p - 1))) {
+    a = str;
+    goto done;
+  }
+
+done:
+  if (end) {
+    *end = (char*) a;
+  }
+  return d;
 }

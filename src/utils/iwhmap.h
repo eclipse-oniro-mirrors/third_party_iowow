@@ -9,7 +9,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,11 +37,11 @@ struct _IWHMAP;
 typedef struct _IWHMAP IWHMAP;
 
 typedef struct {
-  IWHMAP *hm;
+  IWHMAP     *hm;
   const void *key;
   const void *val;
-  uint32_t bucket;
-  int32_t entry;
+  uint32_t    bucket;
+  int32_t     entry;
 } IWHMAP_ITER;
 
 /**
@@ -52,21 +52,22 @@ typedef struct {
  */
 IW_EXPORT void iwhmap_kv_free(void *key, void *val);
 
-IW_EXPORT IWHMAP *iwhmap_create(int (*cmp_fn)(const void *, const void *),
-                                uint32_t (*hash_key_fn)(const void *),
-                                void (*kv_free_fn)(void *, void *));
+IW_EXPORT IWHMAP* iwhmap_create(
+  int (*cmp_fn)(const void*, const void*),
+  uint32_t (*hash_key_fn)(const void*),
+  void (*kv_free_fn)(void*, void*));
 
-IW_EXPORT IWHMAP *iwhmap_create_i64(void (*kv_free_fn)(void *, void *));
+IW_EXPORT IWHMAP* iwhmap_create_i64(void (*kv_free_fn)(void*, void*));
 
-IW_EXPORT IWHMAP *iwhmap_create_i32(void (*kv_free_fn)(void *, void *));
+IW_EXPORT IWHMAP* iwhmap_create_i32(void (*kv_free_fn)(void*, void*));
 
-IW_EXPORT IWHMAP *iwhmap_create_str(void (*kv_free_fn)(void *, void *));
+IW_EXPORT IWHMAP* iwhmap_create_str(void (*kv_free_fn)(void*, void*));
 
 IW_EXPORT iwrc iwhmap_put(IWHMAP *hm, void *key, void *val);
 
 IW_EXPORT void iwhmap_remove(IWHMAP *hm, const void *key);
 
-IW_EXPORT void *iwhmap_get(IWHMAP *hm, const void *key);
+IW_EXPORT void* iwhmap_get(IWHMAP *hm, const void *key);
 
 IW_EXPORT int iwhmap_count(IWHMAP *hm);
 

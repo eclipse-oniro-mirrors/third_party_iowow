@@ -5,13 +5,15 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "iwlog.h"
+#include "sort_r.h"
 
-off_t iwarr_sorted_insert(void *restrict els,
-                          size_t nels,
-                          size_t elsize,
-                          void *restrict eptr,
-                          int (*cmp)(const void *, const void *),
-                          bool skipeq) {
+off_t iwarr_sorted_insert(
+  void* restrict els,
+  size_t nels,
+  size_t elsize,
+  void* restrict eptr,
+  int (*cmp)(const void*, const void*),
+  bool skipeq) {
 
 #define EL(idx_) (elsptr + (idx_) * elsize)
 
@@ -51,11 +53,12 @@ off_t iwarr_sorted_insert(void *restrict els,
 #undef EL
 }
 
-off_t iwarr_sorted_remove(void *restrict els,
-                          size_t nels,
-                          size_t elsize,
-                          void *restrict eptr,
-                          int (*cmp)(const void *, const void *)) {
+off_t iwarr_sorted_remove(
+  void* restrict els,
+  size_t nels,
+  size_t elsize,
+  void* restrict eptr,
+  int (*cmp)(const void*, const void*)) {
 
 #define EL(idx_) (elsptr + (idx_) * elsize)
 
@@ -91,11 +94,12 @@ off_t iwarr_sorted_remove(void *restrict els,
 #undef EL
 }
 
-off_t iwarr_sorted_find(void *restrict els,
-                        size_t nels,
-                        size_t elsize,
-                        void *restrict eptr,
-                        int (*cmp)(const void *, const void *)) {
+off_t iwarr_sorted_find(
+  void* restrict els,
+  size_t nels,
+  size_t elsize,
+  void* restrict eptr,
+  int (*cmp)(const void*, const void*)) {
 
 #define EL(idx_) (elsptr + (idx_) * elsize)
 
@@ -128,13 +132,14 @@ off_t iwarr_sorted_find(void *restrict els,
 #undef EL
 }
 
-off_t iwarr_sorted_find2(void *restrict els,
-                         size_t nels,
-                         size_t elsize,
-                         void *restrict eptr,
-                         void *op,
-                         bool *found,
-                         iwrc(*cmp)(const void *, const void *, void *, int *res)) {
+off_t iwarr_sorted_find2(
+  void* restrict els,
+  size_t nels,
+  size_t elsize,
+  void* restrict eptr,
+  void *op,
+  bool *found,
+  iwrc (*cmp)(const void*, const void*, void*, int *res)) {
 
 #define EL(idx_) (elsptr + (idx_) * elsize)
 
@@ -192,7 +197,7 @@ iwrc iwulist_init(IWULIST *list, size_t initial_length, size_t unit_size) {
   return 0;
 }
 
-IWULIST *iwulist_create(size_t initial_length, size_t unit_size) {
+IWULIST* iwulist_create(size_t initial_length, size_t unit_size) {
   IWULIST *list = malloc(sizeof(*list));
   if (!list) {
     return 0;
@@ -233,7 +238,7 @@ size_t iwulist_length(IWULIST *list) {
   return list->num;
 }
 
-IWULIST *iwulist_clone(IWULIST *list) {
+IWULIST* iwulist_clone(IWULIST *list) {
   if (!list->num) {
     return iwulist_create(list->anum, list->usize);
   }
@@ -255,7 +260,7 @@ IWULIST *iwulist_clone(IWULIST *list) {
   return nlist;
 }
 
-void *iwulist_at(IWULIST *list, size_t index, iwrc *orc) {
+void* iwulist_at(IWULIST *list, size_t index, iwrc *orc) {
   *orc = 0;
   if (index >= list->num) {
     *orc = IW_ERROR_OUT_OF_BOUNDS;
@@ -265,7 +270,7 @@ void *iwulist_at(IWULIST *list, size_t index, iwrc *orc) {
   return list->array + index * list->usize;
 }
 
-void *iwulist_at2(IWULIST *list, size_t index) {
+void* iwulist_at2(IWULIST *list, size_t index) {
   if (index >= list->num) {
     return 0;
   }
@@ -294,9 +299,9 @@ iwrc iwulist_pop(IWULIST *list) {
     return IW_ERROR_OUT_OF_BOUNDS;
   }
   size_t num = list->num - 1;
-  if (list->anum > IWULIST_ALLOC_UNIT && list->anum >= num * 2) {
+  if ((list->anum > IWULIST_ALLOC_UNIT) && (list->anum >= num * 2)) {
     if (list->start) {
-      memcpy(list->array, list->array + list->start * list->usize, num * list->usize);
+      memmove(list->array, list->array + list->start * list->usize, num * list->usize);
       list->start = 0;
     }
     size_t anum = num > IWULIST_ALLOC_UNIT ? num : IWULIST_ALLOC_UNIT;
@@ -317,9 +322,9 @@ iwrc iwulist_shift(IWULIST *list) {
   }
   size_t num = list->num - 1;
   size_t start = list->start + 1;
-  if (list->anum > IWULIST_ALLOC_UNIT && list->anum >= num * 2) {
+  if ((list->anum > IWULIST_ALLOC_UNIT) && (list->anum >= num * 2)) {
     if (start) {
-      memcpy(list->array, list->array + start * list->usize, num * list->usize);
+      memmove(list->array, list->array + start * list->usize, num * list->usize);
       start = 0;
     }
     size_t anum = num > IWULIST_ALLOC_UNIT ? num : IWULIST_ALLOC_UNIT;
@@ -374,9 +379,9 @@ iwrc iwulist_remove(IWULIST *list, size_t index) {
   --list->num;
   memmove(list->array + index * list->usize, list->array + (index + 1) * list->usize,
           (list->start + list->num - index) * list->usize);
-  if (list->anum > IWULIST_ALLOC_UNIT && list->anum >= list->num * 2) {
+  if ((list->anum > IWULIST_ALLOC_UNIT) && (list->anum >= list->num * 2)) {
     if (list->start) {
-      memcpy(list->array, list->array + list->start * list->usize, list->num * list->usize);
+      memmove(list->array, list->array + list->start * list->usize, list->num * list->usize);
       list->start = 0;
     }
     size_t anum = list->num > IWULIST_ALLOC_UNIT ? list->num : IWULIST_ALLOC_UNIT;
@@ -410,6 +415,10 @@ iwrc iwulist_unshift(IWULIST *list, const void *data) {
   return 0;
 }
 
+void iwulist_sort(IWULIST *list, int (*compar)(const void*, const void*, void*), void *op) {
+  sort_r(list->array + list->start * list->usize, list->num, list->usize, compar, op);
+}
+
 ///////////////////////////////////////////////////////////////////////////
 //                      Array list implementation                        //
 ///////////////////////////////////////////////////////////////////////////
@@ -428,7 +437,7 @@ iwrc iwlist_init(IWLIST *list, size_t anum) {
   return 0;
 }
 
-IWLIST *iwlist_create(size_t anum) {
+IWLIST* iwlist_create(size_t anum) {
   IWLIST *list = malloc(sizeof(*list));
   if (!list) {
     return 0;
@@ -471,7 +480,7 @@ size_t iwlist_length(IWLIST *list) {
   return list->num;
 }
 
-IWLIST *iwlist_clone(IWLIST *list) {
+IWLIST* iwlist_clone(IWLIST *list) {
   size_t num = list->num;
   if (!num) {
     return iwlist_create(0);
@@ -503,10 +512,21 @@ IWLIST *iwlist_clone(IWLIST *list) {
   return nlist;
 }
 
-void *iwlist_at(IWLIST *list, size_t index, size_t *osize, iwrc *orc) {
+void* iwlist_at(IWLIST *list, size_t index, size_t *osize, iwrc *orc) {
   *orc = 0;
   if (index >= list->num) {
     *orc = IW_ERROR_OUT_OF_BOUNDS;
+    return 0;
+  }
+  index += list->start;
+  if (osize) {
+    *osize = list->array[index].size;
+  }
+  return list->array[index].val;
+}
+
+void* iwlist_at2(IWLIST *list, size_t index, size_t *osize) {
+  if (index >= list->num) {
     return 0;
   }
   index += list->start;
@@ -539,7 +559,7 @@ iwrc iwlist_push(IWLIST *list, const void *data, size_t data_size) {
   return 0;
 }
 
-void *iwlist_pop(IWLIST *list, size_t *osize, iwrc *orc) {
+void* iwlist_pop(IWLIST *list, size_t *osize, iwrc *orc) {
   *orc = 0;
   if (!list->num) {
     *orc = IW_ERROR_OUT_OF_BOUNDS;
@@ -577,7 +597,7 @@ iwrc iwlist_unshift(IWLIST *list, const void *data, size_t data_size) {
   return 0;
 }
 
-void *iwlist_shift(IWLIST *list, size_t *osize, iwrc *orc) {
+void* iwlist_shift(IWLIST *list, size_t *osize, iwrc *orc) {
   *orc = 0;
   if (!list->num) {
     *orc = IW_ERROR_OUT_OF_BOUNDS;
@@ -588,7 +608,7 @@ void *iwlist_shift(IWLIST *list, size_t *osize, iwrc *orc) {
   --list->num;
   *osize = list->array[index].size;
   void *rv = list->array[index].val;
-  if (!(list->start & 0xff) && list->start > list->num / 2) {
+  if (!(list->start & 0xff) && (list->start > list->num / 2)) {
     memmove(list->array, list->array + list->start, list->num * sizeof(list->array[0]));
     list->start = 0;
   }
@@ -619,7 +639,7 @@ iwrc iwlist_insert(IWLIST *list, size_t index, const void *data, size_t data_siz
   return 0;
 }
 
-iwrc iwlist_set(IWLIST *list, size_t index, const  void *data, size_t data_size) {
+iwrc iwlist_set(IWLIST *list, size_t index, const void *data, size_t data_size) {
   if (index >= list->num) {
     return IW_ERROR_OUT_OF_BOUNDS;
   }
@@ -637,7 +657,7 @@ iwrc iwlist_set(IWLIST *list, size_t index, const  void *data, size_t data_size)
   return 0;
 }
 
-void *iwlist_remove(IWLIST *list, size_t index, size_t *osize, iwrc *orc) {
+void* iwlist_remove(IWLIST *list, size_t index, size_t *osize, iwrc *orc) {
   *orc = 0;
   if (index >= list->num) {
     *orc = IW_ERROR_OUT_OF_BOUNDS;
@@ -652,3 +672,7 @@ void *iwlist_remove(IWLIST *list, size_t index, size_t *osize, iwrc *orc) {
   return rv;
 }
 
+void iwlist_sort(IWLIST *list, int (*compar)(const IWLISTITEM*, const IWLISTITEM*, void*), void *op) {
+  sort_r(list->array + list->start, list->num, sizeof(list->array[0]),
+         (int (*)(const void*, const void*, void*)) compar, op);
+}

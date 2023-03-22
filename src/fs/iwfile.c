@@ -3,7 +3,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,6 +33,11 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 #ifdef _WIN32
 #include <libiberty/libiberty.h>
 #define strndup xstrndup
@@ -41,7 +46,7 @@
 typedef struct IWFS_FILE_IMPL {
   HANDLE fh;               /**< File handle. */
   iwfs_openstatus ostatus; /**< File open status. */
-  IWFS_FILE_OPTS opts;     /**< File open options. */
+  IWFS_FILE_OPTS  opts;    /**< File open options. */
 } IWF;
 
 static iwrc _iwfs_write(struct IWFS_FILE *f, off_t off, const void *buf, size_t siz, size_t *sp) {
@@ -86,7 +91,7 @@ static iwrc _iwfs_close(struct IWFS_FILE *f) {
   }
   IWRC(iwp_closefh(impl->fh), rc);
   if (opts->path) {
-    free((char *) opts->path);
+    free((char*) opts->path);
     opts->path = 0;
   }
   free(f->impl);
@@ -184,8 +189,8 @@ iwrc iwfs_file_open(IWFS_FILE *f, const IWFS_FILE_OPTS *_opts) {
 
   if (opts->dlsnr) {
     IWDLSNR *l = opts->dlsnr;
-    if (!l->onopen || !l->onclosing || !l->oncopy || !l->onresize ||
-        !l->onset || !l->onsynced || !l->onwrite) {
+    if (  !l->onopen || !l->onclosing || !l->oncopy || !l->onresize
+       || !l->onset || !l->onsynced || !l->onwrite) {
       iwlog_ecode_error2(IW_ERROR_INVALID_ARGS, "Invalid 'opts->dlsnr' specified");
       return IW_ERROR_INVALID_ARGS;
     }
@@ -241,7 +246,7 @@ iwrc iwfs_file_open(IWFS_FILE *f, const IWFS_FILE_OPTS *_opts) {
     impl->ostatus = IWFS_OPEN_NEW;
   }
   rc = 0;
-  mode = O_RDONLY;
+  mode = O_RDONLY | O_CLOEXEC;
   if (omode & IWFS_OWRITE) {
     mode = O_RDWR;
     if (omode & IWFS_OCREATE) {
@@ -297,7 +302,7 @@ finish:
   if (rc) {
     impl->ostatus = IWFS_OPEN_FAIL;
     if (opts->path) {
-      free((char *) opts->path);
+      free((char*) opts->path);
     }
     f->impl = 0;
     free(impl);

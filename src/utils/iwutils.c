@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,6 +38,10 @@
 #include <string.h>
 #include "mt19937ar.h"
 
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 #define IWU_RAND_MAX 0xffffffff
 
 iwrc iwu_init(void) {
@@ -55,8 +59,8 @@ uint32_t iwu_rand_u32(void) {
 
 double_t iwu_rand_dnorm(double_t avg, double_t sd) {
   assert(sd >= 0.0);
-  return sqrt(-2.0 * log((genrand_int31() / (double_t) INT_MAX))) *
-         cos(2 * 3.141592653589793 * (genrand_int31() / (double_t) INT_MAX)) * sd + avg;
+  return sqrt(-2.0 * log((genrand_int31() / (double_t) INT_MAX)))
+         * cos(2 * 3.141592653589793 * (genrand_int31() / (double_t) INT_MAX)) * sd + avg;
 }
 
 uint32_t iwu_rand_range(uint32_t range) {
@@ -70,10 +74,10 @@ uint32_t iwu_rand_inorm(int range) {
 
 int iwlog2_32(uint32_t val) {
   static const int tab32[32] = {
-    0,  9,  1, 10, 13, 21,  2, 29,
-    11, 14, 16, 18, 22, 25,  3, 30,
-    8, 12, 20, 28, 15, 17, 24,  7,
-    19, 27, 23,  6, 26,  5,  4, 31
+    0,  9,  1,  10, 13, 21, 2,  29,
+    11, 14, 16, 18, 22, 25, 3,  30,
+    8,  12, 20, 28, 15, 17, 24, 7,
+    19, 27, 23, 6,  26, 5,  4,  31
   };
   val |= val >> 1;
   val |= val >> 2;
@@ -85,10 +89,10 @@ int iwlog2_32(uint32_t val) {
 
 int iwlog2_64(uint64_t val) {
   static const int table[64] = {
-    0, 58, 1, 59, 47, 53, 2, 60, 39, 48, 27, 54, 33, 42, 3, 61,
-    51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4, 62,
+    0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,  61,
+    51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4,  62,
     57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21, 56,
-    45, 25, 31, 35, 16, 9, 12, 44, 24, 15, 8, 23, 7, 6, 5, 63
+    45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5,  63
   };
   val |= val >> 1;
   val |= val >> 2;
@@ -176,7 +180,7 @@ uint32_t iwu_crc32(const uint8_t *buf, int len, uint32_t init) {
   return crc;
 }
 
-char *iwu_replace_char(char *data, char sch, char rch) {
+char* iwu_replace_char(char *data, char sch, char rch) {
   for (int i = 0; data[i]; ++i) {
     if (data[i] == sch) {
       data[i] = rch;
@@ -202,7 +206,7 @@ int iwu_cmp_files(FILE *f1, FILE *f2, bool verbose) {
   int pos = 0, line = 1;
   while (c1 != EOF && c2 != EOF) {
     pos++;
-    if (c1 == '\n' && c2 == '\n') {
+    if ((c1 == '\n') && (c2 == '\n')) {
       line++;
       pos = 0;
     } else if (c1 != c2) {
@@ -220,13 +224,15 @@ int iwu_cmp_files(FILE *f1, FILE *f2, bool verbose) {
   return (c1 - c2);
 }
 
-char *iwu_file_read_as_buf(const char *path) {
+char* iwu_file_read_as_buf(const char *path) {
   struct stat st;
   if (stat(path, &st) == -1) {
     return 0;
   }
-  int fd = open(path, O_RDONLY);
-  if (fd == -1) return 0;
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd == -1) {
+    return 0;
+  }
 
   char *data = malloc(st.st_size + 1);
   if (!data) {
@@ -243,29 +249,34 @@ char *iwu_file_read_as_buf(const char *path) {
 }
 
 uint32_t iwu_x31_u32_hash(const char *s) {
-  uint32_t h = (uint32_t) * s;
+  uint32_t h = (uint32_t) *s;
   if (h) {
     for (++s; *s; ++s) {
-      h = (h << 5) - h + (uint32_t) * s;
+      h = (h << 5) - h + (uint32_t) *s;
     }
   }
   return h;
 }
 
-iwrc iwu_replace(IWXSTR **result,
-                 const char *data,
-                 int datalen,
-                 const char *keys[],
-                 int keysz,
-                 iwu_replace_mapper mapper,
-                 void *mapper_op) {
+iwrc iwu_replace(
+  IWXSTR           **result,
+  const char        *data,
+  int                datalen,
+  const char        *keys[],
+  int                keysz,
+  iwu_replace_mapper mapper,
+  void              *mapper_op) {
 
   if (!result || !data || !keys || !mapper) {
     return IW_ERROR_INVALID_ARGS;
   }
 
+  if (keysz < 0) {
+    for (keysz = 0; keys[keysz] != 0; ++keysz);
+  }
+
   iwrc rc = 0;
-  if (datalen < 1 || keysz < 1) {
+  if ((datalen < 1) || (keysz < 1)) {
     *result = iwxstr_new2(datalen < 1 ? 1 : datalen);
     if (datalen > 0) {
       rc = iwxstr_cat(*result, data, datalen);
@@ -319,7 +330,7 @@ finish:
   if (bbuf) {
     iwxstr_destroy(bbuf);
   }
-  if (!rc && start == data) {
+  if (!rc && (start == data)) {
     rc = iwxstr_cat(inter, data, datalen);
   }
   if (rc) {

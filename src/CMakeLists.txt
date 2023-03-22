@@ -24,6 +24,7 @@ include(CheckIncludeFile)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
 include(TestBigEndian)
+include(TestQsortR)
 
 if (OWNER_PROJECT_NAME)
   set(IW_PUBLIC_HEADER_DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${OWNER_PROJECT_NAME}/${PROJECT_NAME})
@@ -38,6 +39,10 @@ endif()
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
 if (IS_BIG_ENDIAN EQUAL 1)
   add_definitions(-DIW_BIGENDIAN)
+endif()
+
+if (HAVE_QSORT_R)
+  add_definitions(-DIW_HAVE_QSORT_R)
 endif()
 
 if(CMAKE_SIZEOF_VOID_P MATCHES 8)
@@ -106,6 +111,11 @@ if (HAVE_CLOCK_MONOTONIC)
   add_definitions(-DIW_HAVE_CLOCK_MONOTONIC)
 endif()
 
+check_symbol_exists(basename_r libgen.h HAVE_BASENAME_R)
+if (HAVE_BASENAME_R)
+  set_source_files_properties(log/iwlog.c PROPERTIES COMPILE_FLAGS -DIW_HAVE_BASENAME_R)
+endif()
+
 foreach(HF IN ITEMS stdlib stddef stdint stdbool stdatomic unistd dirent)
     string(TOUPPER "${HF}" UHF)
     check_include_file(${HF}.h "IW_HAVE_${UHF}")
@@ -114,9 +124,17 @@ foreach(HF IN ITEMS stdlib stddef stdint stdbool stdatomic unistd dirent)
     endif()
 endforeach(HF)
 
-add_definitions(-D_GNU_SOURCE)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # Needed by Linux in order to use nftw() but fail to build on FreeBSD due to __BSD_VISIBLE define state.
+add_definitions(-D_XOPEN_SOURCE=700)
+endif()
+add_definitions(-D_DEFAULT_SOURCE)
 add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
+if(APPLE)
+  add_definitions(-D_DARWIN_C_SOURCE)
+endif(APPLE)
+
 
 list(APPEND ALL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/iowow.c)
 
@@ -151,6 +169,9 @@ list(APPEND PUB_HDRS ${CMAKE_CURRENT_SOURCE_DIR}/basedefs.h
                      ${CMAKE_CURRENT_SOURCE_DIR}/utils/iwuuid.h
                      ${CMAKE_CURRENT_SOURCE_DIR}/utils/iwxstr.h
                      ${CMAKE_CURRENT_SOURCE_DIR}/utils/murmur3.h
+                     ${CMAKE_CURRENT_SOURCE_DIR}/utils/iwtp.h
+                     ${CMAKE_CURRENT_SOURCE_DIR}/utils/iwrb.h
+                     ${CMAKE_CURRENT_SOURCE_DIR}/utils/iwre.h
                      )
 
 list(REMOVE_DUPLICATES PROJECT_LLIBRARIES)
@@ -199,7 +220,12 @@ file(GLOB PROJECT_GENERATED_HDRS ${PROJECT_GENERATED_DIR}/*.h)
 list(APPEND ALL_HDRS ${PROJECT_GENERATED_HDRS})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tmpl/libiowow.pc.in ${PROJECT_GENERATED_DIR}/libiowow.pc @ONLY)
-install(FILES ${PROJECT_GENERATED_DIR}/libiowow.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+  install(FILES ${PROJECT_GENERATED_DIR}/libiowow.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}data/pkgconfig)
+else()
+  install(FILES ${PROJECT_GENERATED_DIR}/libiowow.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+endif()
 
 foreach(MODULE IN LISTS MODULES)
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${MODULE}/CMakeLists.txt)
