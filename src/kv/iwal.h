@@ -7,7 +7,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,15 +41,15 @@ typedef enum {
   WOP_COPY,
   WOP_WRITE,
   WOP_RESIZE,
-  WOP_FIXPOINT,
+  WOP_SAVEPOINT,
   WOP_RESET,
   WOP_SEP = 127, /**< WAL file separator */
 } wop_t;
 
 #pragma pack(push, 1)
 typedef struct WBSEP {
-  uint8_t id;
-  uint8_t pad[3];
+  uint8_t  id;
+  uint8_t  pad[3];
   uint32_t crc;
   uint32_t len;
 } WBSEP;
@@ -60,41 +60,41 @@ typedef struct WBRESET {
 } WBRESET;
 
 typedef struct WBSET {
-  uint8_t id;
-  uint8_t pad[3];
+  uint8_t  id;
+  uint8_t  pad[3];
   uint32_t val;
-  off_t off;
-  off_t len;
+  off_t    off;
+  off_t    len;
 } WBSET;
 
 typedef struct WBCOPY {
   uint8_t id;
   uint8_t pad[3];
-  off_t off;
-  off_t len;
-  off_t noff;
+  off_t   off;
+  off_t   len;
+  off_t   noff;
 } WBCOPY;
 
 typedef struct WBWRITE {
-  uint8_t id;
-  uint8_t pad[3];
+  uint8_t  id;
+  uint8_t  pad[3];
   uint32_t crc;
   uint32_t len;
-  off_t off;
+  off_t    off;
 } WBWRITE;
 
 typedef struct WBRESIZE {
   uint8_t id;
   uint8_t pad[3];
-  off_t osize;
-  off_t nsize;
+  off_t   osize;
+  off_t   nsize;
 } WBRESIZE;
 
-typedef struct WBFIXPOINT {
-  uint8_t id;
-  uint8_t pad[3];
+typedef struct WBSAVEPOINT {
+  uint8_t  id;
+  uint8_t  pad[3];
   uint64_t ts;
-} WBFIXPOINT;
+} WBSAVEPOINT;
 #pragma pack(pop)
 
 iwrc iwal_create(IWKV iwkv, const IWKV_OPTS *opts, IWFS_FSM_OPTS *fsmopts, bool recover_backup);

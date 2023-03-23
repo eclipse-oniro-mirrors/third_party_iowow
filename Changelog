@@ -1,5 +1,112 @@
-iowow (1.4.10) testing; urgency=medium
+iowow (1.4.16) testing; urgency=medium
+
   * Fixed behavior of iwp_tmpdir() accourding to #47
+  * Fixed  Incorrect serialization of INT64_MIN by iwitoa() #48 (iwconv.h)
+  * Added iwxstr_insert() (iwxstr.h)
+  * ~8% IO performance improvements due to use of MADV_RANDOM
+  * Fixed Github Vulnerability Report GHSL-2022-066
+  * Added additional IW_ERROR_XX codes (iwlog.h)
+  * Added VERBOSE log level (iwlog.h)
+  * Added iwhmap_put_str() (iwhmap.h)
+  * Added iwulist_remove_first_by(), iwulist_find_first() (iwarr.h)
+  * Added iwxstr_new_printf() (iwxstr.h)
+  * Reduced iwkv code complexity. Removed in-memory db cache since benchmarks shows only minor perf imprivements with cache.
+  * Fixed many of UB errors (eg: misaligned access)
+  * Removed dependency on kbtree.h replaced with iwavl.h
+  * Added json module (migrated from ejdb) (iwjson.h, iwbinn.h)
+  * Added platform neutral iwp_basename() and iwp_dirname() (iwp.h)
+  * Added iwu_file_read_as_buf_len() (iwutils.h)
+  * Added IW_NORET (basedefs.h)
+  * iwxstr_destroy_keep_ptr() now returns pointer to underlying buffer
+  * IWHMAP can operate in LRU cache mode (iwhmap.h)
+  * Added .ini file parsing utility module (iwini.h)
+  * Added iw_cond_timed_wait_ms() (iwth.h)
+  * Added iwstw_set_on_task_discard(), iwstw_schedule_only() (iwstw.h)
+  * Fixed iwp_exec_path() on FreeBSD sinceprocfs(5) is not mounted by default in FreeBSD.
+  * iwp_exec_path() implemented for FreeBSD & Macos
+  * Added `int64_t iwatoi2(const char *str, size_t len)` (iwconv.h)
+  * iwpool_split_xx() now returns const pointer (iwpool.h)
+  * Fixed iwre() regexp compilation error.
+  * Added new regexp API implementation (iwre.h) based on https://github.com/jserv/cregex/
+  * Removed iwsha256() from sources. Use iwnet/beassl for hashing instead.
+
+ -- Anton Adamansky <adamansky@gmail.com>  Mon, 14 Nov 2022 18:31:50 +0200
+
+iowow (1.4.15) testing; urgency=medium
+
+  * Added format checking __attribute__ to all printf like functions.
+
+ -- Anton Adamansky <adamansky@gmail.com>  Fri, 18 Feb 2022 21:54:04 +0700
+
+iowow (1.4.14) testing; urgency=medium
+
+  * Used ftruncate() instead of posix_fallocate() due to EINVAL on ZFS (unix.c)
+  * Enable XOPEN_SOURCE only for linux
+  * Fixed incorrect selection of `strerror_r` for musl builds.
+  * Set appropriate _XOPEN_SOURCE=700 level for `nftw` (unix.c)
+  * iwxstr_printf() now conforms to stdlib printf function (iwxstr.h)
+  * Moved some useful defs from iwutil.h into basedefs.h
+  * Fixed iwre_match() function signatute allowing `const  char* input`
+  (iwre.h)
+  * Added lightweight regexp implementation (iwre.h)
+  * Added `size_t iwxstr_asize(IWXSTR*)` (iwxstr.h)
+  * Added locale independed strtod: iwstrtod() (iwconv.h)
+
+ -- Anton Adamansky <adamansky@gmail.com>  Mon, 14 Feb 2022 18:01:17 +0700
+
+iowow (1.4.13) testing; urgency=medium
+
+  * Fixed SEGV in iwkv_cursor_open with zero-length key and IWDB_VNUM64_KEYS (#42)
+  * Fixed Heap UAF in iwkv_close after invoking iwkv_db_set_meta on a database (#41)
+  * Added `iwxstr_wrap()` (iwxstr.h)
+  * Added `RCT()` checker for pthread routines (basedefs.h)
+  * Added iwbin2hex() (iwconv.h)
+  * iwxstr_clear() sets value of intgernal string buffer to zero (iwxstr.h)
+  * Added user data store capability to iwxstr (iwxstr.h)
+  * Added iwpool_strdup2(), iwpool_strndup2() (iwpool.h)
+  * Added iwp_set_current_thread_name() (iwp.h)
+  * Added RCENO define (basedefs.h)
+  * Thread poll, single thread worker fixes
+  * Added IW_MIN, IW_MAX, IW_XSTR defines
+
+ -- Anton Adamansky <adamansky@gmail.com>  Fri, 03 Sep 2021 16:03:05 +0700
+
+iowow (1.4.12) testing; urgency=medium
+
+  * Added IW_ERROR_UNSUPPORTED error code
+  * Added  IW_ALLOC __attribute__((malloc)) optimization
+  * Added ring buffer implementation (iwrb.h)
+  * Added `queue_blocking` argument `iwstw_start()` (iwstw.h)
+  * Minor changes in iwlog.h api
+  * `memcpy` replaced by `memmove` for overlaping cases (iwarr.c)
+
+ -- Anton Adamansky <adamansky@gmail.com>  Mon, 19 Jul 2021 10:09:05 +0700
+
+iowow (1.4.11) testing; urgency=medium
+
+  * Fixed typo (qsort_r => sort_r) (iwarr.c)
+  * Added simple threads pool implementation (iwtp.h)
+  * Added IW_ERROR_NOT_ALLOWED error code (iwlog.h)
+  * Added RCR() error checking macro (basedefs.h)
+  * Added iwlist_sort(), iwulist_sort() (iwarr.h)
+  * Added iwstw_schedule_empty_only() (iwstw.h)
+  * Added iwstw_queue_size() (iwstw.h)
+  * Set O_CLOEXEC flag on all file open() calls
+  * Added IW_ERROR_UNEXPECTED_RESPONSE error code (iwlog.h)
+  * Added iwxstr_set_size(), iwxstr_destroy_keep_ptr() (iwxstr.h)
+  * Added iwlist_at2() (iwarr.h)
+  * Added handy ZRET definition (basedefs.h)
+  * Added handy ZGO definition (basedefs.h)
+  * Project code reformatted using uncrustify
+  * Updated copyright headers
+  * Fixed build errors on macOS
+  * Removed dependency on glibc specific features
+  * Added new iwxstr_pop() (iwxstr.h)
+
+ -- Anton Adamansky <adamansky@gmail.com>  Mon, 10 May 2021 16:43:52 +0700
+
+iowow (1.4.10) testing; urgency=medium
+
   * Tuned iwkv file resizing policy
   * Fixed misuse of `IWKV_OPTS.file_lock_fail_fast` (#35)
   * Correct handling of EINTR, EAGAIN in read/write functions (unix.c)

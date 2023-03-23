@@ -11,21 +11,21 @@
 
 /** Atomic heap unit */
 typedef struct IWPOOL_UNIT {
-  void               *heap;
+  void *heap;
   struct IWPOOL_UNIT *next;
 } IWPOOL_UNIT;
 
 /** Memory pool */
 struct _IWPOOL {
-  size_t       usiz;      /**< Used size */
-  size_t       asiz;      /**< Allocated size */
-  char        *heap;      /**< Current pool heap ptr */
-  IWPOOL_UNIT *unit;      /**< Current heap unit */
-  void        *user_data; /**< Associated user data */
-  void (*user_data_free_fn)(void *);       /**< User data dispose function */
+  size_t usiz;                       /**< Used size */
+  size_t asiz;                       /**< Allocated size */
+  char  *heap;                       /**< Current pool heap ptr */
+  IWPOOL_UNIT *unit;                 /**< Current heap unit */
+  void *user_data;                   /**< Associated user data */
+  void  (*user_data_free_fn)(void*); /**< User data dispose function */
 };
 
-IWPOOL *iwpool_create(size_t siz) {
+IWPOOL* iwpool_create(size_t siz) {
   IWPOOL *pool;
   siz = siz < 1 ? IWPOOL_POOL_SIZ : siz;
   siz = IW_ROUNDUP(siz, IWPOOL_UNIT_ALIGN_SIZE);
@@ -60,12 +60,12 @@ error:
   return 0;
 }
 
-IWPOOL *iwpool_create_empty(void) {
+IWPOOL* iwpool_create_empty(void) {
   return calloc(1, sizeof(struct _IWPOOL));
 }
 
 IW_INLINE int iwpool_extend(IWPOOL *pool, size_t siz) {
-  IWPOOL_UNIT *nunit =  malloc(sizeof(*nunit));
+  IWPOOL_UNIT *nunit = malloc(sizeof(*nunit));
   if (!nunit) {
     return 0;
   }
@@ -83,7 +83,7 @@ IW_INLINE int iwpool_extend(IWPOOL *pool, size_t siz) {
   return 1;
 }
 
-void *iwpool_alloc(size_t siz, IWPOOL *pool) {
+void* iwpool_alloc(size_t siz, IWPOOL *pool) {
   siz = IW_ROUNDUP(siz, IWPOOL_UNIT_ALIGN_SIZE);
   size_t usiz = pool->usiz + siz;
   if (SIZE_T_MAX - pool->usiz < siz) {
@@ -105,7 +105,7 @@ void *iwpool_alloc(size_t siz, IWPOOL *pool) {
   return h;
 }
 
-void *iwpool_calloc(size_t siz, IWPOOL *pool) {
+void* iwpool_calloc(size_t siz, IWPOOL *pool) {
   void *res = iwpool_alloc(siz, pool);
   if (!res) {
     return 0;
@@ -114,7 +114,7 @@ void *iwpool_calloc(size_t siz, IWPOOL *pool) {
   return res;
 }
 
-char *iwpool_strndup(IWPOOL *pool, const char *str, size_t len, iwrc *rcp) {
+char* iwpool_strndup(IWPOOL *pool, const char *str, size_t len, iwrc *rcp) {
   char *ret = iwpool_alloc(len + 1, pool);
   if (!ret) {
     *rcp = iwrc_set_errno(IW_ERROR_ALLOC, errno);
@@ -127,8 +127,18 @@ char *iwpool_strndup(IWPOOL *pool, const char *str, size_t len, iwrc *rcp) {
   return ret;
 }
 
-char *iwpool_strdup(IWPOOL *pool, const char *str, iwrc *rcp) {
+char* iwpool_strdup(IWPOOL *pool, const char *str, iwrc *rcp) {
   return iwpool_strndup(pool, str, strlen(str), rcp);
+}
+
+char* iwpool_strdup2(IWPOOL *pool, const char *str) {
+  iwrc rc;
+  return iwpool_strndup(pool, str, strlen(str), &rc);
+}
+
+char* iwpool_strndup2(IWPOOL *pool, const char *str, size_t len) {
+  iwrc rc;
+  return iwpool_strndup(pool, str, len, &rc);
 }
 
 IW_INLINE int _iwpool_printf_estimate_size(const char *format, va_list ap) {
@@ -136,7 +146,7 @@ IW_INLINE int _iwpool_printf_estimate_size(const char *format, va_list ap) {
   return vsnprintf(buf, sizeof(buf), format, ap) + 1;
 }
 
-static char *_iwpool_printf_va(IWPOOL *pool, int size, const char *format, va_list ap) {
+static char* _iwpool_printf_va(IWPOOL *pool, int size, const char *format, va_list ap) {
   char *wbuf = iwpool_alloc(size, pool);
   if (!wbuf) {
     return 0;
@@ -145,7 +155,7 @@ static char *_iwpool_printf_va(IWPOOL *pool, int size, const char *format, va_li
   return wbuf;
 }
 
-char *iwpool_printf(IWPOOL *pool, const char *format, ...) {
+char* iwpool_printf(IWPOOL *pool, const char *format, ...) {
   va_list ap;
   va_start(ap, format);
   int size = _iwpool_printf_estimate_size(format, ap);
@@ -156,27 +166,34 @@ char *iwpool_printf(IWPOOL *pool, const char *format, ...) {
   return res;
 }
 
-char **iwpool_split_string(IWPOOL *pool, const char *haystack, const char *split_chars,
-                           bool ignore_whitespace) {
-
+const char** iwpool_split_string(
+  IWPOOL *pool, const char *haystack, const char *split_chars,
+  bool ignore_whitespace
+  ) {
   size_t hsz = strlen(haystack);
-  char **ret = iwpool_alloc((hsz + 1) * sizeof(char *), pool);
-  if (!ret) return 0;
+  const char **ret = iwpool_alloc((hsz + 1) * sizeof(char*), pool);
+  if (!ret) {
+    return 0;
+  }
   const char *sp = haystack;
   const char *ep = sp;
   int j = 0;
   for (int i = 0; *ep; ++i, ++ep) {
     const char ch = haystack[i];
     const char *sch = strchr(split_chars, ch);
-    if (ep >= sp && (sch || *(ep + 1) == '\0')) {
-      if (!sch && *(ep + 1) == '\0') ++ep;
+    if ((ep >= sp) && (sch || (*(ep + 1) == '\0'))) {
+      if (!sch && (*(ep + 1) == '\0')) {
+        ++ep;
+      }
       if (ignore_whitespace) {
         while (isspace(*sp)) ++sp;
         while (isspace(*(ep - 1))) --ep;
       }
       if (ep >= sp) {
         char *s = iwpool_alloc(ep - sp + 1, pool);
-        if (!s) return 0;
+        if (!s) {
+          return 0;
+        }
         memcpy(s, sp, ep - sp);
         s[ep - sp] = '\0';
         ret[j++] = s;
@@ -189,10 +206,11 @@ char **iwpool_split_string(IWPOOL *pool, const char *haystack, const char *split
   return ret;
 }
 
-char **iwpool_printf_split(IWPOOL *pool,
-                           const char *split_chars, bool ignore_whitespace,
-                           const char *format, ...) {
-
+const char** iwpool_printf_split(
+  IWPOOL *pool,
+  const char *split_chars, bool ignore_whitespace,
+  const char *format, ...
+  ) {
   va_list ap;
   va_start(ap, format);
   int size = _iwpool_printf_estimate_size(format, ap);
@@ -204,7 +222,7 @@ char **iwpool_printf_split(IWPOOL *pool,
   va_start(ap, format);
   vsnprintf(buf, size, format, ap);
   va_end(ap);
-  char **ret = iwpool_split_string(pool, buf, split_chars, ignore_whitespace);
+  const char **ret = iwpool_split_string(pool, buf, split_chars, ignore_whitespace);
   free(buf);
   return ret;
 }
@@ -213,7 +231,7 @@ void iwpool_free_fn(void *pool) {
   iwpool_destroy(pool);
 }
 
-void iwpool_user_data_set(IWPOOL *pool, void *data, void (*free_fn)(void *)) {
+void iwpool_user_data_set(IWPOOL *pool, void *data, void (*free_fn)(void*)) {
   if (pool->user_data_free_fn) {
     pool->user_data_free_fn(pool->user_data);
   }
@@ -221,12 +239,12 @@ void iwpool_user_data_set(IWPOOL *pool, void *data, void (*free_fn)(void *)) {
   pool->user_data = data;
 }
 
-void *iwpool_user_data_detach(IWPOOL *pool) {
+void* iwpool_user_data_detach(IWPOOL *pool) {
   pool->user_data_free_fn = 0;
   return pool->user_data;
 }
 
-void *iwpool_user_data_get(IWPOOL *pool) {
+void* iwpool_user_data_get(IWPOOL *pool) {
   return pool->user_data;
 }
 

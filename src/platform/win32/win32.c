@@ -3,14 +3,16 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
+
 #include "iwcfg.h"
 
-#define _NANOSECONDS_PER_TICK     100ULL
-#define _NANOSECONDS_PER_SECOND   1000000000ULL
-#define _TICKS_PER_SECOND         10000000ULL
-#define _TICKS_PER_MILLISECOND    10000ULL
-#define _SEC_TO_UNIX_EPOCH        11644473600ULL
-#define _TICKS_TO_UNIX_EPOCH (_TICKS_PER_SECOND * _SEC_TO_UNIX_EPOCH)
+#define _NANOSECONDS_PER_TICK   100ULL
+#define _NANOSECONDS_PER_SECOND 1000000000ULL
+#define _TICKS_PER_SECOND       10000000ULL
+#define _TICKS_PER_MILLISECOND  10000ULL
+#define _SEC_TO_UNIX_EPOCH      11644473600ULL
+#define _TICKS_TO_UNIX_EPOCH    (_TICKS_PER_SECOND * _SEC_TO_UNIX_EPOCH)
 #define _TIMESPEC2MS(IW_ts) ((IW_ts).tv_sec * 1000) + (uint64_t) round((IW_ts).tv_nsec / 1.0e6)
 
 IW_INLINE uint64_t _iwp_filetime2ticks(const FILETIME *ft) {
@@ -33,7 +35,7 @@ IW_INLINE uint64_t _iwp_filetime2millisecons(const FILETIME *ft) {
   return ticks / _TICKS_PER_MILLISECOND;
 }
 
-iwrc iwp_clock_get_time(int clock_id, struct timespec* spec) {
+iwrc iwp_clock_get_time(int clock_id, struct timespec *spec) {
   int rci = clock_gettime(clock_id, spec);
   if (rci) {
     return iwrc_set_errno(IW_ERROR_ERRNO, errno);
@@ -64,7 +66,7 @@ iwrc iwp_fdatasync(HANDLE fh) {
 
 static SYSTEM_INFO sysinfo;
 
-static void _iwp_getsysinfo() {
+static void _iwp_getsysinfo(void) {
   GetSystemInfo(&sysinfo);
 }
 
@@ -76,7 +78,7 @@ size_t iwp_alloc_unit(void) {
   return sysinfo.dwAllocationGranularity;
 }
 
-uint16_t iwp_num_cpu_cores() {
+uint16_t iwp_num_cpu_cores(void) {
   return sysinfo.dwNumberOfProcessors;
 }
 
@@ -109,7 +111,7 @@ iwrc iwp_sleep(uint64_t ms) {
 
 iwrc iwp_fstat(const char *path, IWP_FILE_STAT *fs) {
   memset(fs, 0, sizeof(*fs));
-  struct stat st = {0};
+  struct stat st = { 0 };
   if (stat(path, &st)) {
     return (errno == ENOENT) ? IW_ERROR_NOT_EXISTS : iwrc_set_errno(IW_ERROR_IO_ERRNO, errno);
   }
@@ -135,7 +137,7 @@ iwrc iwp_fstath(HANDLE fh, IWP_FILE_STAT *fs) {
   }
   if (!GetFileInformationByHandle(fh, &info)) {
     uint32_t err = GetLastError();
-    if (err == ERROR_FILE_NOT_FOUND)  {
+    if (err == ERROR_FILE_NOT_FOUND) {
       return IW_ERROR_NOT_EXISTS;
     }
     return iwrc_set_werror(IW_ERROR_IO_ERRNO, GetLastError());
@@ -144,7 +146,7 @@ iwrc iwp_fstath(HANDLE fh, IWP_FILE_STAT *fs) {
   fs->ctime = _iwp_filetime2millisecons(&info.ftCreationTime);
   fs->mtime = _iwp_filetime2millisecons(&info.ftLastWriteTime);
   ULARGE_INTEGER ul = {
-    .LowPart = info.nFileSizeLow,
+    .LowPart  = info.nFileSizeLow,
     .HighPart = info.nFileSizeHigh
   };
   fs->size = ul.QuadPart;
@@ -174,9 +176,13 @@ iwrc iwp_flock(HANDLE fh, iwp_lockmode lmode) {
     return 0;
   }
   DWORD type = 0; /* shared lock with waiting */
-  OVERLAPPED offset = {0};
-  if (lmode & IWP_WLOCK) type = LOCKFILE_EXCLUSIVE_LOCK;
-  if (lmode & IWP_NBLOCK) type |= LOCKFILE_FAIL_IMMEDIATELY;
+  OVERLAPPED offset = { 0 };
+  if (lmode & IWP_WLOCK) {
+    type = LOCKFILE_EXCLUSIVE_LOCK;
+  }
+  if (lmode & IWP_NBLOCK) {
+    type |= LOCKFILE_FAIL_IMMEDIATELY;
+  }
   if (!LockFileEx(fh, type, 0, ULONG_MAX, ULONG_MAX, &offset)) {
     return iwrc_set_werror(IW_ERROR_ERRNO, GetLastError());
   }
@@ -187,7 +193,7 @@ iwrc iwp_unlock(HANDLE fh) {
   if (INVALIDHANDLE(fh)) {
     return IW_ERROR_INVALID_HANDLE;
   }
-  OVERLAPPED offset = {0};
+  OVERLAPPED offset = { 0 };
   if (!UnlockFileEx(fh, 0, ULONG_MAX, ULONG_MAX, &offset)) {
     return iwrc_set_werror(IW_ERROR_ERRNO, GetLastError());
   } else {
@@ -204,7 +210,7 @@ iwrc iwp_pread(HANDLE fh, off_t off, void *buf, size_t siz, size_t *sp) {
   }
   DWORD rdb;
   ULARGE_INTEGER bigint;
-  OVERLAPPED offset = {0};
+  OVERLAPPED offset = { 0 };
   bigint.QuadPart = off;
   offset.Offset = bigint.LowPart;
   offset.OffsetHigh = bigint.HighPart;
@@ -251,7 +257,7 @@ iwrc iwp_pwrite(HANDLE fh, off_t off, const void *buf, size_t siz, size_t *sp) {
   }
   DWORD wrb;
   ULARGE_INTEGER bigint;
-  OVERLAPPED offset = {0};
+  OVERLAPPED offset = { 0 };
   bigint.QuadPart = off;
   offset.Offset = bigint.LowPart;
   offset.OffsetHigh = bigint.HighPart;
@@ -300,11 +306,15 @@ iwrc iwp_lseek(HANDLE fh, off_t offset, iwp_seek_origin origin, off_t *pos) {
   return 0;
 }
 
+void iwp_set_current_thread_name(const char *name) {
+  pthread_setname_np(pthread_self(), name);
+}
+
 size_t iwp_tmpdir(char *out, size_t len) {
   return GetTempPathA(len, out);
 }
 
-static iwrc _iwp_init_impl() {
+static iwrc _iwp_init_impl(void) {
   _iwp_getsysinfo();
   return 0;
 }

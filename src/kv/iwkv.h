@@ -7,7 +7,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2012-2020 Softmotions Ltd <info@softmotions.com>
+ * Copyright (c) 2012-2022 Softmotions Ltd <info@softmotions.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,6 @@
  * <strong>Limitations:<strong>
  * - Maximum iwkv storage file size: 512 GB (0x7fffffff80)
  * - Total size of a single key+value record must be not greater than 255Mb (0xfffffff)
- * - In-memory cache for every opened database takes ~130Kb, cache can be disposed by `iwkv_db_cache_release()`
  */
 
 #include "iowow.h"
@@ -62,20 +61,31 @@ IW_EXTERN_C_START
  */
 typedef enum {
   _IWKV_ERROR_START = (IW_ERROR_START + 5000UL),
-  IWKV_ERROR_NOTFOUND,                /**< Key not found (IWKV_ERROR_NOTFOUND) */
-  IWKV_ERROR_KEY_EXISTS,              /**< Key already exists (IWKV_ERROR_KEY_EXISTS) */
-  IWKV_ERROR_MAXKVSZ,                 /**< Size of Key+value must be not greater than 0xfffffff bytes (IWKV_ERROR_MAXKVSZ) */
-  IWKV_ERROR_CORRUPTED,               /**< Database file invalid or corrupted (IWKV_ERROR_CORRUPTED) */
-  IWKV_ERROR_DUP_VALUE_SIZE,          /**< Value size is not compatible for insertion into sorted values array (IWKV_ERROR_DUP_VALUE_SIZE) */
-  IWKV_ERROR_KEY_NUM_VALUE_SIZE,      /**< Given key is not compatible to storage as number (IWKV_ERROR_KEY_NUM_VALUE_SIZE)  */
-  IWKV_ERROR_INCOMPATIBLE_DB_MODE,    /**< Incorpatible database open mode (IWKV_ERROR_INCOMPATIBLE_DB_MODE) */
-  IWKV_ERROR_INCOMPATIBLE_DB_FORMAT,  /**< Incompatible database format version, please migrate database data (IWKV_ERROR_INCOMPATIBLE_DB_FORMAT) */
-  IWKV_ERROR_CORRUPTED_WAL_FILE,      /**< Corrupted WAL file (IWKV_ERROR_CORRUPTED_WAL_FILE) */
-  IWKV_ERROR_VALUE_CANNOT_BE_INCREMENTED, /**< Stored value cannot be incremented/descremented (IWKV_ERROR_VALUE_CANNOT_BE_INCREMENTED) */
-  IWKV_ERROR_WAL_MODE_REQUIRED,       /**< Operation requires WAL enabled database. (IWKV_ERROR_WAL_MODE_REQUIRED) */
-  IWKV_ERROR_BACKUP_IN_PROGRESS,      /**< Backup operation in progress. (IWKV_ERROR_BACKUP_IN_PROGRESS) */
+  IWKV_ERROR_NOTFOUND,                    /**< Key not found (IWKV_ERROR_NOTFOUND) */
+  IWKV_ERROR_KEY_EXISTS,                  /**< Key already exists (IWKV_ERROR_KEY_EXISTS) */
+  IWKV_ERROR_MAXKVSZ,
+  /**< Size of Key+value must be not greater than 0xfffffff bytes
+     (IWKV_ERROR_MAXKVSZ) */
+  IWKV_ERROR_CORRUPTED,                   /**< Database file invalid or corrupted (IWKV_ERROR_CORRUPTED) */
+  IWKV_ERROR_DUP_VALUE_SIZE,
+  /**< Value size is not compatible for insertion into sorted values array
+     (IWKV_ERROR_DUP_VALUE_SIZE) */
+  IWKV_ERROR_KEY_NUM_VALUE_SIZE,
+  /**< Given key is not compatible to storage as number
+     (IWKV_ERROR_KEY_NUM_VALUE_SIZE)  */
+  IWKV_ERROR_INCOMPATIBLE_DB_MODE,        /**< Incorpatible database open mode (IWKV_ERROR_INCOMPATIBLE_DB_MODE) */
+  IWKV_ERROR_INCOMPATIBLE_DB_FORMAT,
+  /**< Incompatible database format version, please migrate database data
+     (IWKV_ERROR_INCOMPATIBLE_DB_FORMAT) */
+  IWKV_ERROR_CORRUPTED_WAL_FILE,          /**< Corrupted WAL file (IWKV_ERROR_CORRUPTED_WAL_FILE) */
+  IWKV_ERROR_VALUE_CANNOT_BE_INCREMENTED,
+  /**< Stored value cannot be incremented/descremented
+     (IWKV_ERROR_VALUE_CANNOT_BE_INCREMENTED) */
+  IWKV_ERROR_WAL_MODE_REQUIRED,
+  /**< Operation requires WAL enabled database. (IWKV_ERROR_WAL_MODE_REQUIRED)
+   */
+  IWKV_ERROR_BACKUP_IN_PROGRESS,          /**< Backup operation in progress. (IWKV_ERROR_BACKUP_IN_PROGRESS) */
   _IWKV_ERROR_END,
-
   // Internal only
   _IWKV_RC_KVBLOCK_FULL,
   _IWKV_RC_REQUIRE_NLEVEL,
@@ -87,56 +97,56 @@ typedef uint8_t iwkv_openflags;
 /** Open storage file in read-only mode */
 #define IWKV_RDONLY ((iwkv_openflags) 0x02U)
 /** Truncate storage file on open */
-#define IWKV_TRUNC  ((iwkv_openflags) 0x04U)
+#define IWKV_TRUNC            ((iwkv_openflags) 0x04U)
 #define IWKV_NO_TRIM_ON_CLOSE ((iwkv_openflags) 0x08U)
 
 /** Database initialization modes */
 typedef uint8_t iwdb_flags_t;
 
 /** Floating point number keys represented as string (char*) value. */
-#define IWDB_REALNUM_KEYS     ((iwdb_flags_t) 0x10U)
+#define IWDB_REALNUM_KEYS ((iwdb_flags_t) 0x10U)
 
 /** Variable-length number keys */
-#define IWDB_VNUM64_KEYS      ((iwdb_flags_t) 0x20U)
+#define IWDB_VNUM64_KEYS ((iwdb_flags_t) 0x20U)
 
 /**
  * Enable compound database keys. Keys stored in the following format: `<key value prefix><numeric key suffix>`
  * Allows associate one `key value` with many references represented as VNUM64 (eg.: Non unique table indexes).
  * @see IWKV_val.compound
  */
-#define IWDB_COMPOUND_KEYS    ((iwdb_flags_t) 0x40U)
+#define IWDB_COMPOUND_KEYS ((iwdb_flags_t) 0x40U)
 
 /**  Record store modes used in `iwkv_put()` and `iwkv_cursor_set()` functions. */
 typedef uint8_t iwkv_opflags;
 
 /** Do not overwrite value for an existing key.
    `IWKV_ERROR_KEY_EXISTS` will be returned in such cases. */
-#define IWKV_NO_OVERWRITE       ((iwkv_opflags) 0x01U)
+#define IWKV_NO_OVERWRITE ((iwkv_opflags) 0x01U)
 
 /** Flush changes on disk after operation */
-#define IWKV_SYNC               ((iwkv_opflags) 0x04U)
+#define IWKV_SYNC ((iwkv_opflags) 0x04U)
 
 /** Increment/decrement stored UINT32|UINT64 value by given INT32|INT64 number
     `IWKV_ERROR_KEY_EXISTS` does not makes sense if this flag set. */
-#define IWKV_VAL_INCREMENT      ((iwkv_opflags) 0x10U)
+#define IWKV_VAL_INCREMENT ((iwkv_opflags) 0x10U)
 
 struct _IWKV;
-typedef struct _IWKV *IWKV;
+typedef struct _IWKV*IWKV;
 
 struct _IWDB;
-typedef struct _IWDB *IWDB;
+typedef struct _IWDB*IWDB;
 
 /**
  * @brief Write ahead log (WAL) options.
  */
 typedef struct IWKV_WAL_OPTS {
-  bool enabled;                     /**< WAL enabled */
-  bool check_crc_on_checkpoint;     /**< Check CRC32 sum of data blocks during checkpoint. Default: false */
+  bool     enabled;                 /**< WAL enabled */
+  bool     check_crc_on_checkpoint; /**< Check CRC32 sum of data blocks during checkpoint. Default: false */
   uint32_t savepoint_timeout_sec;   /**< Savepoint timeout seconds. Default: 10 sec */
   uint32_t checkpoint_timeout_sec;  /**< Checkpoint timeout seconds. Default: 300 sec (5 min); */
-  size_t wal_buffer_sz;             /**< WAL file intermediate buffer size. Default: 8Mb */
+  size_t   wal_buffer_sz;           /**< WAL file intermediate buffer size. Default: 8Mb */
   uint64_t checkpoint_buffer_sz;    /**< Checkpoint buffer size in bytes. Default: 1Gb */
-  iwrc(*wal_lock_interceptor)(bool, void *);
+  iwrc (*wal_lock_interceptor)(bool, void*);
   /**< Optional function called
        - before acquiring
        - after releasing
@@ -150,7 +160,7 @@ typedef struct IWKV_WAL_OPTS {
  */
 typedef struct IWKV_OPTS {
   const char *path;                 /**< Path to database file */
-  uint32_t random_seed;             /**< Random seed used for iwu random generator */
+  uint32_t    random_seed;          /**< Random seed used for iwu random generator */
   /**
    * Database storage format version.
    * Leave it as zero for the latest supported format.
@@ -166,7 +176,7 @@ typedef struct IWKV_OPTS {
  * @brief Data container for key/value.
  */
 typedef struct IWKV_val {
-  void *data;            /**< Data buffer */
+  void  *data;           /**< Data buffer */
   size_t size;           /**< Data buffer size */
   /** Extra key part used for key comparison.
    *  If set to non zero and database is created with `IWDB_COMPOUND_KEYS` mode
@@ -180,7 +190,7 @@ typedef struct IWKV_val {
  * @brief Cursor opaque handler.
  */
 struct _IWKV_cursor;
-typedef struct _IWKV_cursor *IWKV_cursor;
+typedef struct _IWKV_cursor*IWKV_cursor;
 
 /**
  * @brief Database cursor operations and position flags.
@@ -191,7 +201,7 @@ typedef enum IWKV_cursor_op {
   IWKV_CURSOR_NEXT,             /**< Move cursor to the next record */
   IWKV_CURSOR_PREV,             /**< Move cursor to the previous record */
   IWKV_CURSOR_EQ,               /**< Set cursor to the specified key value */
-  IWKV_CURSOR_GE                /**< Set cursor to the key which greater or equal key specified */
+  IWKV_CURSOR_GE,               /**< Set cursor to the key which greater or equal key specified */
 } IWKV_cursor_op;
 
 /**
@@ -222,8 +232,6 @@ IW_EXPORT WUR iwrc iwkv_open(const IWKV_OPTS *opts, IWKV *iwkvp);
  *          a new database will be created using specified function arguments.
  *
  * @note Database handler doesn't require to be explicitly closed or freed.
- *       Although it may be usefull to release database cache memory of unused databases
- *       dependening on memory requirements of your application by `iwkv_db_cache_release()`.
  * @note Database `flags` argument must be same for all subsequent
  *       calls after first call for particular database,
  *       otherwise `IWKV_ERROR_INCOMPATIBLE_DB_MODE` will be reported.
@@ -244,15 +252,6 @@ IW_EXPORT WUR iwrc iwkv_db(IWKV iwkv, uint32_t dbid, iwdb_flags_t flags, IWDB *d
  * @param [out] dbp Pointer to database opaque structure
  */
 IW_EXPORT WUR iwrc iwkv_new_db(IWKV iwkv, iwdb_flags_t dbflg, uint32_t *dbidp, IWDB *dbp);
-
-/**
- * @brief Frees memory resources used by database cache
- *        until to next database access operation (get/put/cursor).
- *        Typicaly it will free ~130Kb of memory per database in use.
- *
- * @param db Database handler
- */
-IW_EXPORT iwrc iwkv_db_cache_release(IWDB db);
 
 /**
  * @brief Destroy(drop) existing database and cleanup all of its data.
@@ -308,14 +307,15 @@ IW_EXPORT iwrc iwkv_put(IWDB db, const IWKV_val *key, const IWKV_val *val, iwkv_
  * @param oldval Old value which will be replaced by `val` may be `NULL`
  * @param op Arbitrary opaqued data passed to this handler
  */
-typedef iwrc(*IWKV_PUT_HANDLER)(const IWKV_val *key, const IWKV_val *val, IWKV_val *oldval, void *op);
+typedef iwrc (*IWKV_PUT_HANDLER)(const IWKV_val *key, const IWKV_val *val, IWKV_val *oldval, void *op);
 
 /**
  * @brief Store record in database.
  * @see iwkv_put()
  */
-IW_EXPORT iwrc iwkv_puth(IWDB db, const IWKV_val *key, const IWKV_val *val,
-                         iwkv_opflags opflags, IWKV_PUT_HANDLER ph, void *phop);
+IW_EXPORT iwrc iwkv_puth(
+  IWDB db, const IWKV_val *key, const IWKV_val *val,
+  iwkv_opflags opflags, IWKV_PUT_HANDLER ph, void *phop);
 
 /**
  * @brief Get value for given `key`.
@@ -396,10 +396,12 @@ IW_EXPORT void iwkv_kv_dispose(IWKV_val *key, IWKV_val *val);
  * @param op Cursor open mode/initial positions flags
  * @param key Optional key argument, required to point cursor to the given key.
  */
-IW_EXPORT WUR iwrc iwkv_cursor_open(IWDB db,
-                                    IWKV_cursor *cur,
-                                    IWKV_cursor_op op,
-                                    const IWKV_val *key);
+IW_EXPORT WUR iwrc iwkv_cursor_open(
+  IWDB            db,
+  IWKV_cursor    *cur,
+  IWKV_cursor_op  op,
+  const IWKV_val *key);
+
 /**
  * @brief Move cursor to the next position.
  *
@@ -486,8 +488,9 @@ IW_EXPORT iwrc iwkv_cursor_is_matched_key(IWKV_cursor cur, const IWKV_val *key, 
  */
 IW_EXPORT iwrc iwkv_cursor_set(IWKV_cursor cur, IWKV_val *val, iwkv_opflags opflags);
 
-IW_EXPORT iwrc iwkv_cursor_seth(IWKV_cursor cur, IWKV_val *val, iwkv_opflags opflags,
-                                IWKV_PUT_HANDLER ph, void *phop);
+IW_EXPORT iwrc iwkv_cursor_seth(
+  IWKV_cursor cur, IWKV_val *val, iwkv_opflags opflags,
+  IWKV_PUT_HANDLER ph, void *phop);
 
 /**
  * @brief Remove record value at current cursor position.

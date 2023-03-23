@@ -1,21 +1,25 @@
-IOWOW - The C11 persistent key/value database engine based on [skip list](https://en.wikipedia.org/wiki/Skip_list)
+IOWOW — `C11` utility library and persistent key/value storage engine
 ==================================================================================================================
 
-![Build Status](https://dev.softmotions.com/jenkins/buildStatus/icon?job=iowow_test)
-[![Join ejdb2 telegram](https://img.shields.io/badge/join-ejdb2%20telegram-0088cc.svg)](https://t.me/ejdb2)
 [![license](https://img.shields.io/github/license/Softmotions/ejdb.svg)](https://github.com/Softmotions/iowow/blob/master/LICENSE)
-![Maintained](https://img.shields.io/maintenance/yes/2020.svg)
+![Maintained](https://img.shields.io/maintenance/yes/2022.svg)
 
-Website http://iowow.io
+Website https://iowow.softmotions.com
 
 # Key components
 
-* [iwkv.h](https://github.com/Softmotions/iowow/blob/master/src/kv/iwkv.h) Persistent key/value database engine
-* [iwfsmfile.h](https://github.com/Softmotions/iowow/blob/master/src/fs/iwfsmfile.h) File blocks allocation manager like `malloc()` on files
+* [utils](https://github.com/Softmotions/iowow/tree/master/src/utils) Useful data structures and various commonly used routines.
+* [json](https://github.com/Softmotions/iowow/tree/master/src/json) JSON parsing and manipulation routines incluing JSON Patch/Pointers support.
+* [iwkv.h](https://github.com/Softmotions/iowow/blob/master/src/kv/iwkv.h) Persistent key/value database engine.
+* [iwfsmfile.h](https://github.com/Softmotions/iowow/blob/master/src/fs/iwfsmfile.h) File blocks allocation manager like `malloc()` on files.
 
-# IWKV
+## Used by
 
-## Features
+* EJDB2 — Embeddable JSON database engine. http://ejdb.org
+* [Wirow video conferencing platform](https://github.com/wirow-io/wirow-server/)
+* [Pure C Asynchronous HTTP/IO library with websockets, SSL, routing. ](https://github.com/Softmotions/iwnet)
+
+## IWKV Features
 
 * Support of multiple key-value databases within a single file
 * Online database backups
@@ -26,30 +30,16 @@ Website http://iowow.io
 * Good performance comparing its main competitors: `lmdb`, `leveldb`, `kyoto cabinet`
 * Tiny C11 library (200Kb) can be easily embedded into any software
 
-[![Presentation](https://iowow.io/articles/iowow-presentation-cover-small.png)](https://iowow.io/articles/intro/)
+[![IWKV Presentation](https://iowow.softmotions.com/articles/iowow-presentation-cover-small.png)](https://iowow.softmotions.com/articles/intro/)
 
-
-## Used by
-
-* EJDB - Embeddable JSON database engine. http://ejdb.org
-
-## Limitations
+## IWKV Limitations
 
 * Maximum iwkv storage file size: `512 GB (0x7fffffff80)`
 * Total size of a single key+value record must be not greater than `255Mb (0xfffffff)`
-* In-memory cache for every opened database takes `~130Kb`, cache can be disposed by `iwkv_db_cache_release()`
 
 # Supported platforms
 
 ## Linux
-### Ubuntu/Debian
-#### PPA repository
-
-```sh
-sudo add-apt-repository ppa:adamansky/iwowow
-sudo apt-get update
-sudo apt-get install iowow
-```
 
 #### Building debian packages
 
@@ -340,4 +330,9 @@ Arsenal: 40
 AFC Bournemouth: 27
 ```
 
+## IWSTART
+
+IWSTART is an automatic CMake initial project generator for C projects based on iowow / [iwnet](https://github.com/Softmotions/iwnet) / [ejdb2](https://github.com/Softmotions/ejdb) libs.
+
+https://github.com/Softmotions/iwstart
 

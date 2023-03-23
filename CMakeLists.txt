@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 include(CMakeToolsHelpers OPTIONAL)
@@ -35,6 +35,7 @@ set(${PROJECT_NAME}_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Build test cases" OFF)
 option(ASAN "Turn on address sanitizer" OFF)
+option(UBSAN "Turn on UB sanitizer" OFF)
 option(BUILD_EXAMPLES "Build example projects" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(PACKAGE_DEB "Build .deb instalation packages" OFF)
@@ -121,8 +122,9 @@ if(CPACK_GENERATORS)
             "\\\\.workspace$"
             "\\\\.iml$"
             "\\\\.mk$"
-            "\\\\.astylerc$"
             "\\\\.editorconfig$"
+            "\\\\.astylerc$"
+            "uncrustify\\\\.cfg$"
             "/Makefile$"
     )
     set(PROJECT_ARCH "${CMAKE_SYSTEM_PROCESSOR}")

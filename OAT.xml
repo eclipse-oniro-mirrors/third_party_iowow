@@ -66,6 +66,9 @@ Note:If the text contains special characters, please escape them according to th
             <filefilter name="defaultPolicyFilter" desc="Filters for compatibility，license header policies">
                 <filteritem type="filepath" name="release.sh" desc="the header of the file is not license" />
                 <filteritem type="filepath" name="src/bindings/ejdb2_flutter/ios/ejdb2_flutter.podspec" desc="the header of the file is not license" />
+                <filteritem type="filepath" name="src/utils/iwre.c" desc="the header of the file is not license" />
+                <filteritem type="filepath" name="src/utils/iwavl.h" desc="CC0 1.0 Universal" />
+                <filteritem type="filepath" name="src/utils/iwavl.c" desc="CC0 1.0 Universal" />
             </filefilter>
             <filefilter name="copyrightPolicyFilter" desc="Filters for copyright header policies">
             </filefilter>
@@ -154,6 +157,70 @@ Note:If the text contains special characters, please escape them according to th
                 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
                 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
                 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+                desc=""/>
+            </licensematcher>
+            <licensematcher name="BSD-3-Clause" desc="">
+                <licensetext name="
+                Copyright (c) 2011, Willem-Hendrik Thiart
+                Copyright (c) 2012-2022 Softmotions Ltd &gt; info@softmotions.com &gt;
+                All rights reserved.
+
+                Redistribution and use in source and binary forms, with or without
+                modification, are permitted provided that the following conditions are met:
+                * Redistributions of source code must retain the above copyright
+                    notice, this list of conditions and the following disclaimer.
+                * Redistributions in binary form must reproduce the above copyright
+                    notice, this list of conditions and the following disclaimer in the
+                    documentation and/or other materials provided with the distribution.
+                * The names of its contributors may not be used to endorse or promote
+                    products derived from this software without specific prior written
+                    permission.
+
+                THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &gt; AS IS &gt; AND
+                ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+                WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+                DISCLAIMED. IN NO EVENT SHALL WILLEM-HENDRIK THIART BE LIABLE FOR ANY
+                DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+                (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+                LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+                ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+                (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+                SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+                desc=""/>
+            </licensematcher>
+            <licensematcher name="Khronos License" desc="">
+                <licensetext name="
+                Copyright (c) 2014 by Ian Piumarta
+                All rights reserved.
+
+                Permission is hereby granted, free of charge, to any person obtaining a
+                copy of this software and associated documentation files (the &gt;Software&gt;),
+                to deal in the Software without restriction, including without limitation
+                the rights to use, copy, modify, merge, publish, distribute, and/or sell
+                copies of the Software, and to permit persons to whom the Software is
+                furnished to do so, provided that the above copyright notice(s) and this
+                permission notice appear in all copies of the Software.  Acknowledgement
+                of the use of this Software in supporting documentation would be
+                appreciated but is not required.
+
+                THE SOFTWARE IS PROVIDED &gt;AS IS&gt;.  USE ENTIRELY AT YOUR OWN RISK."
+                desc=""/>
+            </licensematcher>
+            <licensematcher name="CC0 1.0 Universal" desc="">
+                <licensetext name="
+                Written in 2014-2016 by Eric Biggers &gt;ebiggers3@gmail.com&gt;
+
+                To the extent possible under law, the author(s) have dedicated all copyright
+                and related and neighboring rights to this software to the public domain
+                worldwide via the Creative Commons Zero 1.0 Universal Public Domain
+                Dedication (the &gt;CC0&gt;).
+
+                This software is distributed in the hope that it will be useful, but WITHOUT
+                ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+                FOR A PARTICULAR PURPOSE. See the CC0 for more details.
+
+                You should have received a copy of the CC0 along with this software; if not
+                see &gt;http://creativecommons.org/publicdomain/zero/1.0/&gt;."
                 desc=""/>
             </licensematcher>
         </licensematcherlist>

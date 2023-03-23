@@ -31,6 +31,12 @@
 #include "basedefs.h"
 #include <pthread.h>
 
+IW_EXPORT iwrc iw_cond_timed_wait_ms(
+  pthread_cond_t  *cond,
+  pthread_mutex_t *mtx,
+  long             timeout_ms,
+  bool            *out_is_timeout);
+
 #if defined(__APPLE__) || (defined(__ANDROID_API__) && __ANDROID_API__ < 24)
 
 #ifdef __cplusplus
@@ -38,14 +44,14 @@ extern "C" {
 #endif
 
 #if !defined(PTHREAD_BARRIER_SERIAL_THREAD)
-# define PTHREAD_BARRIER_SERIAL_THREAD  (1)
+# define PTHREAD_BARRIER_SERIAL_THREAD (1)
 #endif
 
 #if !defined(PTHREAD_PROCESS_PRIVATE)
-# define PTHREAD_PROCESS_PRIVATE  (42)
+# define PTHREAD_PROCESS_PRIVATE (42)
 #endif
 #if !defined(PTHREAD_PROCESS_SHARED)
-# define PTHREAD_PROCESS_SHARED   (43)
+# define PTHREAD_PROCESS_SHARED (43)
 #endif
 
 typedef struct {
@@ -54,23 +60,26 @@ typedef struct {
 
 typedef struct {
   pthread_mutex_t mutex;
-  pthread_cond_t cond;
-  unsigned int limit;
-  unsigned int count;
-  unsigned int phase;
+  pthread_cond_t  cond;
+  unsigned int    limit;
+  unsigned int    count;
+  unsigned int    phase;
 } pthread_barrier_t;
 
 IW_EXPORT int pthread_barrierattr_init(pthread_barrierattr_t *attr);
 IW_EXPORT int pthread_barrierattr_destroy(pthread_barrierattr_t *attr);
 
-IW_EXPORT int pthread_barrierattr_getpshared(const pthread_barrierattr_t *restrict attr,
-                                             int *restrict pshared);
-IW_EXPORT int pthread_barrierattr_setpshared(pthread_barrierattr_t *attr,
-                                             int pshared);
+IW_EXPORT int pthread_barrierattr_getpshared(
+  const pthread_barrierattr_t* restrict attr,
+  int* restrict                         pshared);
+IW_EXPORT int pthread_barrierattr_setpshared(
+  pthread_barrierattr_t *attr,
+  int                    pshared);
 
-IW_EXPORT int pthread_barrier_init(pthread_barrier_t *restrict barrier,
-                                   const pthread_barrierattr_t *restrict attr,
-                                   unsigned int count);
+IW_EXPORT int pthread_barrier_init(
+  pthread_barrier_t* restrict           barrier,
+  const pthread_barrierattr_t* restrict attr,
+  unsigned int                          count);
 IW_EXPORT int pthread_barrier_destroy(pthread_barrier_t *barrier);
 
 IW_EXPORT int pthread_barrier_wait(pthread_barrier_t *barrier);

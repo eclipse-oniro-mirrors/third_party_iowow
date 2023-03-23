@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <stdarg.h>
+#include <errno.h>
 
 // Default IWXSTR initial size
 #ifndef IWXSTR_AUNIT
@@ -12,39 +12,108 @@
 #endif
 
 struct _IWXSTR {
-  char *ptr;      /**< Data buffer */
+  char  *ptr;     /**< Data buffer */
   size_t size;    /**< Actual data size */
   size_t asize;   /**< Allocated buffer size */
+  void   (*user_data_free_fn)(void*);
+  void  *user_data;
 };
 
-IWXSTR *iwxstr_new2(size_t siz) {
-  if (!siz) siz = IWXSTR_AUNIT;
+IWXSTR* iwxstr_new2(size_t siz) {
+  if (!siz) {
+    siz = IWXSTR_AUNIT;
+  }
   IWXSTR *xstr = malloc(sizeof(*xstr));
-  if (!xstr) return 0;
+  if (!xstr) {
+    return 0;
+  }
   xstr->ptr = malloc(siz);
   if (!xstr->ptr) {
     free(xstr);
     return 0;
   }
+  xstr->user_data = 0;
+  xstr->user_data_free_fn = 0;
   xstr->size = 0;
   xstr->asize = siz;
   xstr->ptr[0] = '\0';
   return xstr;
 }
 
-IWXSTR *iwxstr_new(void) {
+IWXSTR* iwxstr_new(void) {
   return iwxstr_new2(IWXSTR_AUNIT);
 }
 
+IWXSTR* iwxstr_new_clone(const IWXSTR *xstr) {
+  IWXSTR *ret = malloc(sizeof(*ret));
+  if (!ret) {
+    return 0;
+  }
+  ret->user_data = 0;
+  ret->user_data_free_fn = 0;
+  ret->size = xstr->size;
+  ret->asize = xstr->asize;
+  ret->ptr = malloc(xstr->asize);
+  if (!ret->ptr) {
+    free(ret);
+    return 0;
+  }
+  if (xstr->size) {
+    memcpy(ret->ptr, xstr->ptr, xstr->size);
+  }
+  return ret;
+}
+
+IWXSTR* iwxstr_wrap(char *buf, size_t size, size_t asize) {
+  IWXSTR *xstr = malloc(sizeof(*xstr));
+  if (!xstr) {
+    return 0;
+  }
+  xstr->user_data = 0;
+  xstr->user_data_free_fn = 0;
+  xstr->size = size;
+  xstr->asize = asize;
+  xstr->ptr = buf;
+
+  if (size >= asize) {
+    xstr->ptr = realloc(buf, size + 1);
+    if (!xstr->ptr) {
+      free(xstr);
+      return 0;
+    }
+    xstr->asize = size + 1;
+  }
+  xstr->ptr[size] = '\0';
+  return xstr;
+}
+
 void iwxstr_destroy(IWXSTR *xstr) {
-  if (!xstr) return;
+  if (!xstr) {
+    return;
+  }
+  if (xstr->user_data_free_fn) {
+    xstr->user_data_free_fn(xstr->user_data);
+  }
   free(xstr->ptr);
   free(xstr);
+}
+
+char* iwxstr_destroy_keep_ptr(IWXSTR *xstr) {
+  if (!xstr) {
+    return 0;
+  }
+  char *ptr = xstr->ptr;
+  if (xstr->user_data_free_fn) {
+    xstr->user_data_free_fn(xstr->user_data);
+  }
+  free(xstr);
+  return ptr;
 }
 
 void iwxstr_clear(IWXSTR *xstr) {
   assert(xstr);
   xstr->size = 0;
+  xstr->ptr[0] = '\0';
 }
 
 iwrc iwxstr_cat(IWXSTR *xstr, const void *buf, size_t size) {
@@ -58,13 +127,32 @@ iwrc iwxstr_cat(IWXSTR *xstr, const void *buf, size_t size) {
     }
     char *ptr = realloc(xstr->ptr, xstr->asize);
     if (!ptr) {
-      return IW_ERROR_ERRNO;
+      return IW_ERROR_ALLOC;
     }
     xstr->ptr = ptr;
   }
   memcpy(xstr->ptr + xstr->size, buf, size);
   xstr->size += size;
   xstr->ptr[xstr->size] = '\0';
+  return IW_OK;
+}
+
+iwrc iwxstr_set_size(IWXSTR *xstr, size_t size) {
+  size_t nsize = size + 1;
+  if (xstr->asize < nsize) {
+    while (xstr->asize < nsize) {
+      xstr->asize <<= 1;
+      if (xstr->asize < nsize) {
+        xstr->asize = nsize;
+      }
+    }
+    char *ptr = realloc(xstr->ptr, xstr->asize);
+    if (!ptr) {
+      return IW_ERROR_ALLOC;
+    }
+    xstr->ptr = ptr;
+  }
+  xstr->size = size;
   return IW_OK;
 }
 
@@ -83,7 +171,7 @@ iwrc iwxstr_unshift(IWXSTR *xstr, const void *buf, size_t size) {
     }
     char *ptr = realloc(xstr->ptr, xstr->asize);
     if (!ptr) {
-      return IW_ERROR_ERRNO;
+      return IW_ERROR_ALLOC;
     }
     xstr->ptr = ptr;
   }
@@ -111,81 +199,98 @@ void iwxstr_shift(IWXSTR *xstr, size_t shift_size) {
   xstr->ptr[xstr->size] = '\0';
 }
 
-static iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list ap) {
-  iwrc rc = 0;
-  while (*format) {
-    if (*format == '%') {
-      char cbuf[32];
-      cbuf[0] = '%';
-      size_t cblen = 1;
-      int lnum = 0;
-      ++format;
-      while (strchr("0123456789 .+-hlLzI", *format) && *format && cblen < sizeof(cbuf) - 1) {
-        if (*format == 'l' || *format == 'L') {
-          lnum++;
-        }
-        cbuf[cblen++] = *(format++);
+void iwxstr_pop(IWXSTR *xstr, size_t pop_size) {
+  if (pop_size == 0) {
+    return;
+  }
+  if (pop_size > xstr->size) {
+    pop_size = xstr->size;
+  }
+  xstr->size -= pop_size;
+  xstr->ptr[xstr->size] = '\0';
+}
+
+iwrc iwxstr_insert(IWXSTR *xstr, size_t pos, const void *buf, size_t size) {
+  if (pos > xstr->size) {
+    return IW_ERROR_OUT_OF_BOUNDS;
+  }
+  if (size == 0) {
+    return 0;
+  }
+  size_t nsize = xstr->size + size + 1;
+  if (xstr->asize < nsize) {
+    while (xstr->asize < nsize) {
+      xstr->asize <<= 1;
+      if (xstr->asize < nsize) {
+        xstr->asize = nsize;
       }
-      cbuf[cblen++] = *format;
-      cbuf[cblen] = '\0';
-      int tlen;
-      char *tmp, tbuf[128];
-      switch (*format) {
-        case 's':
-          tmp = va_arg(ap, char *);
-          if (!tmp) tmp = "(null)";
-          rc = iwxstr_cat(xstr, tmp, strlen(tmp));
-          break;
-        case 'd':
-          if (lnum >= 2) { // -V1037
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, long long));
-          } else if (lnum >= 1) {
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, long));
-          } else {
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, int));
-          }
-          rc = iwxstr_cat(xstr, tbuf, (size_t) tlen);
-          break;
-        case 'o':
-        case 'u':
-        case 'x':
-        case 'X':
-        case 'c':
-          if (lnum >= 2) {
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long long));
-          } else if (lnum >= 1) {
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long));
-          } else {
-            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned int));
-          }
-          rc = iwxstr_cat(xstr, tbuf, (size_t) tlen);
-          break;
-        case 'e':
-        case 'E':
-        case 'f':
-        case 'g':
-        case 'G':
-          if (lnum > 1) {
-            tlen = snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, long double));
-          } else {
-            tlen = snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, double));
-          }
-          if (tlen < 0 || tlen >= sizeof(tbuf)) {
-            tbuf[sizeof(tbuf) - 1] = '*';
-            tlen = sizeof(tbuf);
-          }
-          rc = iwxstr_cat(xstr, tbuf, (size_t) tlen);
-          break;
-        case '%':
-          rc = iwxstr_cat(xstr, "%", 1);
-          break;
-      }
-      RCBREAK(rc);
-    } else {
-      rc = iwxstr_cat(xstr, format, 1);
-      RCRET(rc);
     }
-    format++;
+    char *ptr = realloc(xstr->ptr, xstr->asize);
+    if (!ptr) {
+      return IW_ERROR_ALLOC;
+    }
+    xstr->ptr = ptr;
+  }
+  memmove(xstr->ptr + pos + size, xstr->ptr + pos, xstr->size - pos + 1 /* \0 */);
+  memcpy(xstr->ptr + pos, buf, size);
+  xstr->size += size;
+  return IW_OK;
+}
+
+iwrc iwxstr_insert_vaprintf(IWXSTR *xstr, size_t pos, const char *format, va_list va) {
+  iwrc rc = 0;
+  char buf[1024];
+  va_list cva;
+  va_copy(cva, va);
+  char *wp = buf;
+  int len = vsnprintf(wp, sizeof(buf), format, va);
+  if (len >= sizeof(buf)) {
+    RCA(wp = malloc(len + 1), finish);
+    len = vsnprintf(wp, len + 1, format, cva);
+    if (len < 0) {
+      rc = IW_ERROR_FAIL;
+      goto finish;
+    }
+  }
+  rc = iwxstr_insert(xstr, pos, wp, len);
+
+finish:
+  va_end(cva);
+  if (wp != buf) {
+    free(wp);
+  }
+  return rc;
+}
+
+iwrc iwxstr_insert_printf(IWXSTR *xstr, size_t pos, const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  iwrc rc = iwxstr_insert_vaprintf(xstr, pos, format, ap);
+  va_end(ap);
+  return rc;
+}
+
+iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list va) {
+  iwrc rc = 0;
+  char buf[1024];
+  va_list cva;
+  va_copy(cva, va);
+  char *wp = buf;
+  int len = vsnprintf(wp, sizeof(buf), format, va);
+  if (len >= sizeof(buf)) {
+    RCA(wp = malloc(len + 1), finish);
+    len = vsnprintf(wp, len + 1, format, cva);
+    if (len < 0) {
+      rc = IW_ERROR_FAIL;
+      goto finish;
+    }
+  }
+  rc = iwxstr_cat(xstr, wp, len);
+
+finish:
+  va_end(cva);
+  if (wp != buf) {
+    free(wp);
   }
   return rc;
 }
@@ -193,12 +298,28 @@ static iwrc iwxstr_vaprintf(IWXSTR *xstr, const char *format, va_list ap) {
 iwrc iwxstr_printf(IWXSTR *xstr, const char *format, ...) {
   va_list ap;
   va_start(ap, format);
-  iwrc rc  = iwxstr_vaprintf(xstr, format, ap);
+  iwrc rc = iwxstr_vaprintf(xstr, format, ap);
   va_end(ap);
   return rc;
 }
 
-char *iwxstr_ptr(IWXSTR *xstr) {
+IWXSTR* iwxstr_new_printf(const char *format, ...) {
+  IWXSTR *xstr = iwxstr_new();
+  if (!xstr) {
+    return 0;
+  }
+  va_list ap;
+  va_start(ap, format);
+  iwrc rc = iwxstr_vaprintf(xstr, format, ap);
+  va_end(ap);
+  if (rc) {
+    iwxstr_destroy(xstr);
+    return 0;
+  }
+  return xstr;
+}
+
+char* iwxstr_ptr(IWXSTR *xstr) {
   return xstr->ptr;
 }
 
@@ -206,3 +327,23 @@ size_t iwxstr_size(IWXSTR *xstr) {
   return xstr->size;
 }
 
+size_t iwxstr_asize(IWXSTR *xstr) {
+  return xstr->asize;
+}
+
+void iwxstr_user_data_set(IWXSTR *xstr, void *data, void (*free_fn)(void*)) {
+  if (xstr->user_data_free_fn) {
+    xstr->user_data_free_fn(xstr->user_data);
+  }
+  xstr->user_data = data;
+  xstr->user_data_free_fn = free_fn;
+}
+
+void* iwxstr_user_data_get(IWXSTR *xstr) {
+  return xstr->user_data;
+}
+
+void* iwxstr_user_data_detach(IWXSTR *xstr) {
+  xstr->user_data_free_fn = 0;
+  return xstr->user_data;
+}

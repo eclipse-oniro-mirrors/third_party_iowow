@@ -1,32 +1,42 @@
 #include "iwstw.h"
 #include "iwth.h"
 #include "iwlog.h"
+#include "iwp.h"
+
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <string.h>
 
-struct _TASK {
+struct task {
   iwstw_task_f fn;
   void *arg;
-  struct _TASK *next;
+  struct task *next;
 };
 
-struct _IWSTW {
-  struct _TASK *head;
-  struct _TASK *tail;
+struct iwstw {
+  struct task *head;
+  struct task *tail;
+  char *thread_name;
+  iwstw_on_task_discard_f on_task_discard;
   pthread_mutex_t mtx;
-  pthread_barrier_t brr;
-  pthread_cond_t cond;
-  pthread_t thr;
-  int cnt;
-  int queue_limit;
+  pthread_cond_t  cond;
+  pthread_cond_t  cond_queue;
+  pthread_t       thr;
+  int  cnt;
+  int  queue_limit;
+  bool queue_blocking;
+  bool queue_blocked;
   volatile bool shutdown;
 };
 
-void *worker_fn(void *op) {
-  struct _IWSTW *stw = op;
+static void* _worker_fn(void *op) {
+  struct iwstw *stw = op;
   assert(stw);
-  pthread_barrier_wait(&stw->brr);
+
+  if (stw->thread_name) {
+    iwp_set_current_thread_name(stw->thread_name);
+  }
 
   while (true) {
     void *arg;
@@ -34,12 +44,12 @@ void *worker_fn(void *op) {
 
     pthread_mutex_lock(&stw->mtx);
     if (stw->head) {
-      struct _TASK *h = stw->head;
+      struct task *h = stw->head;
       fn = h->fn;
       arg = h->arg;
       stw->head = h->next;
-      if (stw->tail == h) {
-        stw->tail = stw->head;
+      if (stw->head == 0) {
+        stw->tail = 0;
       }
       --stw->cnt;
       free(h);
@@ -52,11 +62,18 @@ void *worker_fn(void *op) {
 
     pthread_mutex_lock(&stw->mtx);
     if (stw->head) {
+      if (stw->queue_blocked && stw->cnt < stw->queue_limit) {
+        stw->queue_blocked = false;
+        pthread_cond_broadcast(&stw->cond_queue);
+      }
       pthread_mutex_unlock(&stw->mtx);
       continue;
     } else if (stw->shutdown) {
       pthread_mutex_unlock(&stw->mtx);
       break;
+    } else if (stw->queue_blocked && stw->cnt < stw->queue_limit) {
+      stw->queue_blocked = false;
+      pthread_cond_broadcast(&stw->cond_queue);
     }
     pthread_cond_wait(&stw->cond, &stw->mtx);
     pthread_mutex_unlock(&stw->mtx);
@@ -64,21 +81,29 @@ void *worker_fn(void *op) {
   return 0;
 }
 
-void iwstw_shutdown(IWSTW *stwp, bool wait_for_all) {
+iwrc iwstw_shutdown(IWSTW *stwp, bool wait_for_all) {
   if (!stwp || !*stwp) {
-    return;
+    return 0;
   }
   IWSTW stw = *stwp;
   pthread_mutex_lock(&stw->mtx);
   if (stw->shutdown) {
     pthread_mutex_unlock(&stw->mtx);
-    return;
+    return 0;
+  }
+  pthread_t st = pthread_self();
+  if (stw->thr == pthread_self()) {
+    iwlog_error("iwstw | Thread iwstw_shutdown() from self thread: %lu", (unsigned long) st);
+    return IW_ERROR_ASSERTION;
   }
   if (!wait_for_all) {
-    struct _TASK *t = stw->head;
+    struct task *t = stw->head;
     while (t) {
-      struct _TASK *o = t;
+      struct task *o = t;
       t = t->next;
+      if (stw->on_task_discard) {
+        stw->on_task_discard(t->fn, t->arg);
+      }
       free(o);
     }
     stw->head = 0;
@@ -87,17 +112,26 @@ void iwstw_shutdown(IWSTW *stwp, bool wait_for_all) {
   }
   stw->shutdown = true;
   pthread_cond_broadcast(&stw->cond);
-  pthread_mutex_unlock(&stw->mtx);
-  int rci = pthread_join(stw->thr, 0);
-  if (rci) {
-    iwrc rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, rci);
-    iwlog_ecode_error3(rc);
+  if (stw->queue_blocking) {
+    pthread_cond_broadcast(&stw->cond_queue);
   }
-  pthread_barrier_destroy(&stw->brr);
+  pthread_mutex_unlock(&stw->mtx);
+  pthread_join(stw->thr, 0);
   pthread_cond_destroy(&stw->cond);
   pthread_mutex_destroy(&stw->mtx);
+
+  free(stw->thread_name);
   free(stw);
   *stwp = 0;
+  return 0;
+}
+
+int iwstw_queue_size(IWSTW stw) {
+  int res = 0;
+  pthread_mutex_lock(&stw->mtx);
+  res = stw->cnt;
+  pthread_mutex_unlock(&stw->mtx);
+  return res;
 }
 
 iwrc iwstw_schedule(IWSTW stw, iwstw_task_f fn, void *arg) {
@@ -105,9 +139,9 @@ iwrc iwstw_schedule(IWSTW stw, iwstw_task_f fn, void *arg) {
     return IW_ERROR_INVALID_ARGS;
   }
   iwrc rc = 0;
-  struct _TASK *task = malloc(sizeof(*task));
+  struct task *task = malloc(sizeof(*task));
   RCA(task, finish);
-  *task = (struct _TASK) {
+  *task = (struct task) {
     .fn = fn,
     .arg = arg
   };
@@ -121,11 +155,23 @@ iwrc iwstw_schedule(IWSTW stw, iwstw_task_f fn, void *arg) {
     pthread_mutex_unlock(&stw->mtx);
     goto finish;
   }
-  if (stw->queue_limit && stw->cnt + 1 > stw->queue_limit) {
-    rc = IW_ERROR_OVERFLOW;
-    pthread_mutex_unlock(&stw->mtx);
-    goto finish;
+
+  while (stw->queue_limit && (stw->cnt + 1 > stw->queue_limit)) {
+    if (stw->queue_blocking) {
+      if (stw->shutdown) {
+        rc = IW_ERROR_INVALID_STATE;
+        pthread_mutex_unlock(&stw->mtx);
+        goto finish;
+      }
+      stw->queue_blocked = true;
+      pthread_cond_wait(&stw->cond_queue, &stw->mtx);
+    } else {
+      rc = IW_ERROR_OVERFLOW;
+      pthread_mutex_unlock(&stw->mtx);
+      goto finish;
+    }
   }
+
   if (stw->tail) {
     stw->tail->next = task;
     stw->tail = task;
@@ -144,39 +190,134 @@ finish:
   return rc; // NOLINT (clang-analyzer-unix.Malloc)
 }
 
-iwrc iwstw_start(int queue_limit, IWSTW *stwp_out) {
-  struct _IWSTW *stw = malloc(sizeof(*stw));
+iwrc iwstw_schedule_only(IWSTW stw, iwstw_task_f fn, void *arg) {
+  if (!stw || !fn) {
+    return IW_ERROR_INVALID_ARGS;
+  }
+  iwrc rc = 0;
+  struct task *task = malloc(sizeof(*task));
+  RCA(task, finish);
+  *task = (struct task) {
+    .fn = fn,
+    .arg = arg
+  };
+  int rci = pthread_mutex_lock(&stw->mtx);
+  if (rci) {
+    rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, errno);
+    goto finish;
+  }
+  if (stw->shutdown) {
+    rc = IW_ERROR_INVALID_STATE;
+    pthread_mutex_unlock(&stw->mtx);
+    goto finish;
+  }
+
+  struct task *t = stw->head;
+  while (t) {
+    struct task *o = t;
+    t = t->next;
+    if (stw->on_task_discard) {
+      stw->on_task_discard(t->fn, t->arg);
+    }
+    free(o);
+  }
+
+  stw->head = task;
+  stw->tail = task;
+  stw->cnt = 1;
+
+  pthread_cond_broadcast(&stw->cond);
+  pthread_mutex_unlock(&stw->mtx);
+
+finish:
+  if (rc) {
+    free(task);
+  }
+  return rc; // NOLINT (clang-analyzer-unix.Malloc)
+}
+
+iwrc iwstw_schedule_empty_only(IWSTW stw, iwstw_task_f fn, void *arg, bool *out_scheduled) {
+  if (!stw || !fn || !out_scheduled) {
+    return IW_ERROR_INVALID_ARGS;
+  }
+  *out_scheduled = false;
+  iwrc rc = 0;
+  struct task *task = malloc(sizeof(*task));
+  RCA(task, finish);
+  *task = (struct task) {
+    .fn = fn,
+    .arg = arg
+  };
+  int rci = pthread_mutex_lock(&stw->mtx);
+  if (rci) {
+    rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, errno);
+    goto finish;
+  }
+  if (stw->shutdown) {
+    rc = IW_ERROR_INVALID_STATE;
+    pthread_mutex_unlock(&stw->mtx);
+    goto finish;
+  }
+  if (stw->head) {
+    pthread_mutex_unlock(&stw->mtx);
+    goto finish;
+  }
+  *out_scheduled = true;
+  stw->head = task;
+  stw->tail = task;
+  ++stw->cnt;
+  pthread_cond_broadcast(&stw->cond);
+  pthread_mutex_unlock(&stw->mtx);
+
+finish:
+  if (rc) {
+    free(task);
+  }
+  return rc; // NOLINT (clang-analyzer-unix.Malloc)
+}
+
+void iwstw_set_on_task_discard(IWSTW stw, iwstw_on_task_discard_f on_task_discard) {
+  stw->on_task_discard = on_task_discard;
+}
+
+iwrc iwstw_start(const char *thread_name, int queue_limit, bool queue_blocking, IWSTW *out_stw) {
+  if (queue_limit < 0 || !out_stw) {
+    return IW_ERROR_INVALID_ARGS;
+  }
+  if (thread_name && strlen(thread_name) > 15) {
+    return IW_ERROR_INVALID_ARGS;
+  }
+  struct iwstw *stw = malloc(sizeof(*stw));
   if (!stw) {
-    *stwp_out = 0;
+    *out_stw = 0;
     return iwrc_set_errno(IW_ERROR_ALLOC, errno);
   }
   int rci;
   iwrc rc = 0;
-  *stw = (struct _IWSTW) {
+  *stw = (struct iwstw) {
     .queue_limit = queue_limit,
     .mtx = PTHREAD_MUTEX_INITIALIZER,
-    .cond = PTHREAD_COND_INITIALIZER
+    .cond = PTHREAD_COND_INITIALIZER,
+    .cond_queue = PTHREAD_COND_INITIALIZER,
+    .queue_blocking = queue_blocking
   };
-  rci = pthread_barrier_init(&stw->brr, 0, 2);
+  if (thread_name) {
+    stw->thread_name = strdup(thread_name);
+  }
+
+  rci = pthread_create(&stw->thr, 0, _worker_fn, stw);
   if (rci) {
     rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, errno);
     goto finish;
   }
-  rci = pthread_create(&stw->thr, 0, worker_fn, stw);
-  if (rci) {
-    rc = iwrc_set_errno(IW_ERROR_THREADING_ERRNO, errno);
-    pthread_barrier_destroy(&stw->brr);
-    goto finish;
-  }
-  pthread_barrier_wait(&stw->brr);
 
 finish:
   if (rc) {
-    *stwp_out = 0;
+    *out_stw = 0;
+    free(stw->thread_name);
     free(stw);
   } else {
-    *stwp_out = stw;
+    *out_stw = stw;
   }
   return 0;
-
 }
