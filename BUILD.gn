@@ -125,6 +125,7 @@ ohos_shared_library("iowow") {
     "src/utils/utf8proc.c",
   ]
 
+  innerapi_tags = [ "platformsdk" ]
   part_name = "iowow"
   subsystem_name = "thirdparty"
 }
